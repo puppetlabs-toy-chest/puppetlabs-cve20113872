@@ -51,9 +51,9 @@ perl -p -l -i.backup1 -e 's,^(\s*?)(SSLCertificateFile\s+)(.*)$,$1# CVE-2011-387
 perl -p -l -i.backup2 -e 's,^(\s*?)(SSLCertificateKeyFile\s+)(.*)$,$1# CVE-2011-3872 Fix (Was: $3)\n$1$2'"${ssldir}/private_keys/${new_master_cert}.pem"',g' "${apachevhost}"
 # Reconfigure PE Apache to use the CRL Bundle
 perl -p -l -i.backup3 -e 's,^(\s*?)(SSLCARevocationFile\s+)(.*)$,$1# CVE-2011-3872 Fix (Was: $3)\n$1$2'"${ssldir}/crl_bundle.pem"',g' "${apachevhost}"
-# Reconfigure PE Apache to use the Old CA
-perl -p -l -i.backup4 -e 's,^(\s*?)(SSLCACertificateFile\s+)(.*)$,$1# CVE-2011-3872 Fix (Was: $3)\n$1$2'"${ssldir}/certs/ca_previous.pem"',g' "${apachevhost}"
-# Reconfigure PE Apache to use the new CA Bundle
+# Reconfigure PE Apache to authenticate the Old CA AND the New CA
+perl -p -l -i.backup4 -e 's,^(\s*?)(SSLCACertificateFile\s+)(.*)$,$1# CVE-2011-3872 Fix (Was: $3)\n$1$2'"${ssldir}/certs/ca_bundle.pem"',g' "${apachevhost}"
+# This isn't strictly necessary since we only use self signed CA's and not chained CA's
 perl -p -l -i.backup4 -e 's,^(\s*?)(SSLCertificateChainFile\s+)(.*)$,$1# CVE-2011-3872 Fix (Was: $3)\n$1$2'"${ssldir}/certs/ca_bundle.pem"',g' "${apachevhost}"
 
 # Generate the new SSL certificate using the old CA
