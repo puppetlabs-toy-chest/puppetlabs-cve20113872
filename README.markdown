@@ -10,6 +10,8 @@ This module provides two main pieces of functionality:
 PE Only Scripts.  These are specifically designed to work with PE.  These
 scripts will need to be adapted to help FOSS users and customers.
 
+    /vagrant/modules/cve20113872/bin/step1_secure_the_master
+
 On a Puppet Master, the `step1_secure_the_master` script should be run first.
 This script will perform the following actions:
 
@@ -28,3 +30,41 @@ e.g. the only change to clients is the server configuration setting.
 
 # Migrate an Agent #
 
+Once all of the Agents has been configured to use the new dns name, securing
+the fleet, they all need to be migrated to the new Certificate Authority.
+
+A fairly clean Puppet Module providing a set of facts and a small class
+performs this migration.  The overall strategy is to move the agent $ssldir out
+of the way and then place down a known good $localcacert and $hostcrl file.
+The Agent will then generate a new CSR the next time it connects to the master.
+
+    /vagrant/modules/cve20113872/bin/step2_install_remedy_module
+
+This script will install the Puppet Module into
+/opt/puppet/share/puppet/modules and make sure it's included in each node's
+catalog in site.pp  To migrate an agent simply run:
+
+    puppet agent --test --server puppetmaster.new
+
+Then, run again to generate a new CSR:
+
+    puppet agent --test --server puppetmaster.new
+
+And sign the certificate request on the master.  This will re-issue a
+certificate that does not contain the certdnsnames problem.
+
+    puppet cert sign --all
+
+Finally, run a third time to make sure the new certificate works.
+
+    puppet agent --test --server puppetmaster.new
+
+# Final Cut Over #
+
+The final step in the migration process, once all Agents have been issued new
+SSL certificates by the new CA, is to replace the master's SSL certificate with
+one issued by the new CA.
+
+    FIXME: TBD
+
+EOF

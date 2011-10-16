@@ -1,4 +1,5 @@
 require 'facter/util/puppet_certificate'
+require 'facter/util/with_puppet'
 
 # The facts this file provides look like:
 # agent_cert_on_disk_basicconstraints => CA:FALSE
@@ -15,44 +16,17 @@ require 'facter/util/puppet_certificate'
 # agent_cert_on_disk_subjectkeyidentifier => B0:3E:E0:9D:F6:F5:FC:5C:40:7E:C4:96:35:91:6B:8F:C4:15:3A:11
 
 module Facter
-module AgentCert
-  def self.with_puppet
-    # This is in case this fact is running without Puppet loaded
-    if Module.constants.include? "Puppet"
-      begin
-        yield if block_given?
-      rescue Facter::Util::PuppetCertificateError => detail
-        # To be as un-intrusive (e.g. when running 'facter')  as possible, this
-        # doesn't even warn at the moment
-        # Facter.warnonce "Could not load facts for #{Puppet[:hostcert]}: #{detail}"
-      end
-    else
-      "Puppet is not loaded.  Didn't do anything... :("
-    end
-  end
-
-  def self.add_file_facts
-    with_puppet do
-      # The block will be evaluated each time the facts are flushed to figure out the certificate file to load.
-      crt = Facter::Util::PuppetCertificate.new() { Puppet[:hostcert] }
-      crt.add_facts
-    end
-  end
-
-  def self.add_certname_facts
-    with_puppet do
-      Facter.add(:agent_certname) do
-        setcode { Puppet[:certname] }
+  class AgentCert
+    # Provides the with_puppet method
+    extend Facter::Util::WithPuppet
+    def self.add_file_facts
+      with_puppet do
+        # The block will be evaluated each time the facts are flushed to figure out the certificate file to load.
+        crt = Facter::Util::PuppetCertificate.new() { Puppet[:hostcert] }
+        crt.add_facts
       end
     end
   end
-
-  def self.add_memory_facts
-    raise NotImplementedError, "REVISIT: Provide facts for certificate in memory"
-  end
-end
 end
 
 Facter::AgentCert.add_file_facts
-Facter::AgentCert.add_certname_facts
-
