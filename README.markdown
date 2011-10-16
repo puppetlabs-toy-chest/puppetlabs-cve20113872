@@ -38,6 +38,15 @@ performs this migration.  The overall strategy is to move the agent $ssldir out
 of the way and then place down a known good $localcacert and $hostcrl file.
 The Agent will then generate a new CSR the next time it connects to the master.
 
+NOTE: If you checked the cve20113872 module out of source, it needs to be built
+into a Puppet Module package before running the step2\_install\_remedy\_module
+script.
+
+    cd /vagrant/modules/cve20113872
+    puppet-module build
+
+Now install the module into /opt/puppet/share/puppet/modules
+
     /vagrant/modules/cve20113872/bin/step2_install_remedy_module
 
 This script will install the Puppet Module into
