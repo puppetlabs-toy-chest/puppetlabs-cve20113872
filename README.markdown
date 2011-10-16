@@ -38,6 +38,15 @@ performs this migration.  The overall strategy is to move the agent $ssldir out
 of the way and then place down a known good $localcacert and $hostcrl file.
 The Agent will then generate a new CSR the next time it connects to the master.
 
+NOTE: If you checked the cve20113872 module out of source, it needs to be built
+into a Puppet Module package before running the step2\_install\_remedy\_module
+script.
+
+    cd /vagrant/modules/cve20113872
+    puppet-module build
+
+Now install the module into /opt/puppet/share/puppet/modules
+
     /vagrant/modules/cve20113872/bin/step2_install_remedy_module
 
 This script will install the Puppet Module into
@@ -65,6 +74,24 @@ The final step in the migration process, once all Agents have been issued new
 SSL certificates by the new CA, is to replace the master's SSL certificate with
 one issued by the new CA.
 
-    FIXME: TBD
+    /opt/puppet/share/puppet/modules/cve20113872/bin/step3_migrate_the_master
+
+This script will reconfigure the Puppet Master to move back from
+"puppetmaster.new" to "puppetmaster"  The SSL certificate for puppetmaster will
+contain the certdnsname for puppetmaster.new, but it will be issued by the new,
+trustworthy CA.
+
+The fleet will refuse to connect to this new node since the fleet only trusts a
+master SSL certificate issued by the Old CA.  To operate with the master again
+they need to re-establish their CA bundle:
+
+    root@pe-debian5:~# rm -f "$(puppet agent --configprint hostcrl)"
+    root@pe-debian5:~# rm -f "$(puppet agent --configprint localcacert)"
+
+With these two files removed, the agent will re-download them from the master,
+thus configuring them to only trust masters with an SSL certificate issued by
+the new CA.
+
+    puppet agent --test --server puppetmaster
 
 EOF

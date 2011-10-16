@@ -18,6 +18,8 @@
 # Requires:
 #
 #   * stdlib version 2.1.1
+#   * pluginsync enabled.  The facts this class requires may not be distributed
+#     to the agents if pluginsync is turned off.
 #
 # Sample Usage:
 #
