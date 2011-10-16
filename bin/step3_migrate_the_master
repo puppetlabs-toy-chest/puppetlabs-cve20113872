@@ -6,7 +6,7 @@ set -u
 
 export PATH="/opt/puppet/bin:$PATH"
 
-timestamp="$(date +%s)"
+timestamp="$(ruby -e 'puts Time.now.to_i')"
 
 puppet resource service pe-httpd ensure=stopped hasstatus=true
 

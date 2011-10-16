@@ -1,16 +1,25 @@
 #! /bin/bash
 #
+
+export PATH="/opt/puppet/bin:$PATH"
+timestamp="$(ruby -e 'puts Time.now.to_i')"
+module="cve20113872"
+
+manifest="$(puppet master --configprint manifest)"
+
 echo "Installing Puppet CVE-2011-3872 CA Migration Module ..."
 cd /opt/puppet/share/puppet/modules
 puppet-module clean
-puppet-module install /vagrant/modules/cve20113872/pkg/puppetlabs-cve20113872-0.0.1.tar.gz --force
+puppet-module install /vagrant/modules/${module}/pkg/puppetlabs-${module}-0.0.1.tar.gz --force
 
-if grep -q 'include cve20113872' /etc/puppetlabs/puppet/manifests/site.pp; then
-  echo "site.pp already includes class cve20113872 ... (Nothing to do)"
+if grep -q "include ${module}" "${manifest}"; then
+  echo "site.pp already includes class ${module} ... (Nothing to do)"
 else
-  echo "Configuring site.pp ..."
-  perl -p -l -i.cve_module -e 's/^(\s*)(node\s+default\s+{\s*)$/$1$2\n$1  # CVE-2011-3872 CA Migration Class\n$1  include cve20113872/' \
-    /etc/puppetlabs/puppet/manifests/site.pp
+  echo "Adding ${module} to the default node in site.pp ..."
+  idx=0
+  ruby -p -l -i.backup.${timestamp}.${idx} -e \
+    'gsub(/^(\s*)(node\s+default\s+{\s*)$/) { "#{$1}#{$2}\n#{$1}  # CVE-2011-3872 CA Migration Class\n#{$1}  include '"${module}"'" }' \
+    "${manifest}"
 fi
 
 echo "Done ..."
