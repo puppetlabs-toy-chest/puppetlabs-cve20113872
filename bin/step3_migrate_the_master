@@ -22,6 +22,7 @@ master_ssldir="$(puppet master --configprint ssldir)"
 master_cadir="$(puppet master --configprint cadir)"
 master_hostcrl="$(puppet master --configprint hostcrl)"
 master_config="$(puppet master --configprint config)"
+master_manifest="$(puppet master --configprint manifest)"
 
 echo "Reconfiguring Puppet Enterprise SSL Server ..." >&2
 idx=0
@@ -38,7 +39,7 @@ cp -p "${master_cadir}/ca_crl.pem" "${master_ssldir}/crl_bundle.pem"
 # PE configures the fileserver using the old name by default in site.pp  We need to fix this
 echo "Patching site.pp to update fileserver resources" >&2
 perl -p -l -i.backup."${timestamp}.${idx}" -e \
-  's/\b(server\s*=>\s*.*?)('"${master_certname}"')(\W*)/$1'"${master_certname_new}"'$3/g' "${confdir}/manifests/site.pp"
+  's/\b(server\s*=>\s*.*?)('"${master_certname}"')(\W*)/$1'"${master_certname_new}"'$3/g' "${master_manifest}"
 ((idx++))
 
 # Patch puppet.conf
