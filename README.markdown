@@ -10,7 +10,7 @@ This module provides two main pieces of functionality:
 PE Only Scripts.  These are specifically designed to work with PE.  These
 scripts will need to be adapted to help FOSS users and customers.
 
-    /vagrant/modules/cve20113872/bin/step1_secure_the_master
+    /vagrant/modules/cve20113872/bin/pe_step1_secure_the_master
 
 On a Puppet Master, the `step1_secure_the_master` script should be run first.
 This script will perform the following actions:
@@ -47,7 +47,7 @@ script.
 
 Now install the module into /opt/puppet/share/puppet/modules
 
-    /vagrant/modules/cve20113872/bin/step2_install_remedy_module
+    /vagrant/modules/cve20113872/bin/pe_step2_install_remedy_module
 
 This script will install the Puppet Module into
 /opt/puppet/share/puppet/modules and make sure it's included in each node's
@@ -74,7 +74,7 @@ The final step in the migration process, once all Agents have been issued new
 SSL certificates by the new CA, is to replace the master's SSL certificate with
 one issued by the new CA.
 
-    /opt/puppet/share/puppet/modules/cve20113872/bin/step3_migrate_the_master
+    /opt/puppet/share/puppet/modules/cve20113872/bin/pe_step3_migrate_the_master
 
 This script will reconfigure the Puppet Master to move back from
 "puppetmaster.new" to "puppetmaster"  The SSL certificate for puppetmaster will
