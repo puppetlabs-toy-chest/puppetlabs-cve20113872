@@ -54,20 +54,20 @@ module Migration
     def set_certificate_revocation(value='false')
       if certificate_revocation_in_conf?
         filter_config_by_line do |line|
-          line.gsub!(/^(\s*)(certificate_revocation)\b(\s*?=\s*).*$/) { "#{$1}certificate_revocation = false" }
+          line.gsub!(/^(\s*)(certificate_revocation)\b(\s*?=\s*).*$/) { "#{$1}certificate_revocation = #{value}" }
         end
       elsif agent_section_in_conf?
         filter_config_by_line do |line|
-          line.gsub!(/^(\s*)\[(agent|puppetd)\].*$/) { "[#{$2}]\n    certificate_revocation = false" }
+          line.gsub!(/^(\s*)\[(agent|puppetd)\].*$/) { "[#{$2}]\n    certificate_revocation = #{value}" }
         end
       elsif main_section_in_conf?
         filter_config_by_line do |line|
-          line.gsub!(/^(\s*)\[main\].*$/) { "[main]\n    certificate_revocation = false" }
+          line.gsub!(/^(\s*)\[main\].*$/) { "[main]\n    certificate_revocation = #{value}" }
         end
       else
         # Simply append the [main] section (Support all puppet versions)
         File.open(config, File::WRONLY|File::APPEND|File::CREAT) do |f|
-          f.print "[main]\n    certificate_revocation = false\n"
+          f.print "[main]\n    certificate_revocation = #{value}\n"
         end
       end
     end
