@@ -50,8 +50,10 @@ class cve20113872 {
   validate_re($agent_certname, ".")
   # Agent's PID to reload it mid-run
   validate_re($agent_pid, '^\d+$')
+  # Agent's vardir.  We'll put scripts in here.
+  validate_re($agent_vardir, '^/')
 
-  Exec { path => "/opt/puppet/bin:/usr/local/bin:/bin:/usr/bin:/sbin:/usr/sbin" }
+  Exec { path => "/opt/puppet/bin:/usr/local/bin:/bin:/usr/bin:/sbin:/usr/sbin:/opt/csw/bin" }
   File {
     require => Exec["CVE-2011-3872 step1"],
     notify  => Exec["CVE-2011-3872 Reload"],
@@ -89,11 +91,26 @@ class cve20113872 {
       path    => "${agent_localcacert}",
       content => file("${master_ssldir}/certs/ca_bundle.pem"),
     }
-    # Configure the agent to trust the old and the new CA CRL.
-    # FIXME: We need a fact for the hostcrl of the agent.
     file { "CVE-2011-3872 Trusted CA Revocation Lists":
-      path    => "${agent_hostcrl}",
-      content => file("${master_ssldir}/crl_bundle.pem"),
+      path   => "${agent_hostcrl}",
+      ensure => absent,
+    }
+    file { "${agent_vardir}/${module}":
+      ensure => directory,
+    }
+    file { "${agent_vardir}/${module}/bin":
+      ensure => directory,
+    }
+    file { "${agent_vardir}/${module}/bin/disable_revocation.rb":
+      ensure  => file,
+      mode    => 0755,
+      content => template("${module}/disable_revocation.rb"),
+      before  => Exec["CVE-2011-3872 Disable Revocation"],
+    }
+    exec { "CVE-2011-3872 Disable Revocation":
+      command => "${agent_vardir}/${module}/bin/disable_revocation.rb",
+      unless  => "bash -c 'puppet agent --configprint certificate_revocation | grep false'",
+      before  => Exec["CVE-2011-3872 Reload"],
     }
     exec { "CVE-2011-3872 Reload":
       command => "kill -HUP ${agent_pid}",
