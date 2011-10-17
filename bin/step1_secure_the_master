@@ -5,6 +5,16 @@ set -u
 
 export PATH="/opt/puppet/bin:$PATH"
 
+# The intermediate certificate name is a required argument
+if [[ -z "${1:-}" ]]; then
+  echo "You must specify the intermediate master certname as argument 1" >&2
+  echo "e.g. $(basename ${0}) puppetmaster.new" >&2
+  exit 1
+else
+  new_master_cert="${1}"
+  shift
+fi
+
 timestamp="$(ruby -e 'puts Time.now.to_i')"
 
 puppet resource service pe-httpd ensure=stopped hasstatus=true
@@ -14,7 +24,6 @@ puppet resource service pe-httpd ensure=stopped hasstatus=true
 # entire system again.
 # We need a new certificate to do this...
 old_master_cert="$(puppet master --configprint certname)"
-new_master_cert="${1:-"${old_master_cert}.new"}"
 
 apachevhost="/etc/puppetlabs/httpd/conf.d/puppetmaster.conf"
 
@@ -27,15 +36,6 @@ hostcrl="$(puppet master --configprint hostcrl)"
 
 # The new CA CN _must_ be different than the old CA CN
 old_ca_cn="$(puppet master --configprint ca_name)"
-
-# Make sure autosign is off.
-echo "Making sure autosign is turned off ... (${autosign})"
-if [[ -e "${autosign}" ]]; then
-  mv "${autosign}" "${autosign}.disabled"
-  echo "Disabled autosign by moving $autosign to ${autosign}.disabled"
-else
-  echo "Autosign does not appear to be enabled.  (${autosign} does not exist)"
-fi
 
 # Make sure certdnnames are off.
 idx=0
