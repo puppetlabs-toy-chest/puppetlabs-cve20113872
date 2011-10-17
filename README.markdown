@@ -7,57 +7,84 @@ This module provides two main pieces of functionality:
 
 # Quick Start (PE) #
 
+## Install the Module ##
+
+The first step in the remediation process is to install the cve20113872 module
+into your Puppet Master module path.  This will likely be /etc/puppet/modules
+or /etc/puppetlabs/puppet/modules for Puppet Enterprise.
+
+(Note, if the module is not yet on the forge, it may be built from source using
+`puppet-module build`)
+
+    cd /etc/puppetlabs/puppet/modules
+    puppet-module install /tmp/puppetlabs-cve20113872-0.0.1.tar.gz
+
+During the rest of these instructions, the modulepath where this module has
+been installed will be referred to as <modulepath>.
+
+## Step 1: Issue a new SSL cert for the master ##
+
+In order to secure your Puppet infrastructure, all agents need to connect to a
+DNS name that has not been listed in the certdnsnames option.  This will be
+called the _intermediate dns name_ certificate.  To accomplish this goal, the
+Puppet Master needs a new SSL certificate with the intermediate DNS name.
+
+Step 1 helps you generate this new certificate and configure Puppet Enterprise
+to use it.
+
 PE Only Scripts.  These are specifically designed to work with PE.  These
 scripts will need to be adapted to help FOSS users and customers.
 
-    /vagrant/modules/cve20113872/bin/pe_step1_secure_the_master
+    <modulepath>/cve20113872/bin/pe_step1_secure_the_master
 
-On a Puppet Master, the `step1_secure_the_master` script should be run first.
+On a Puppet Master, the `pe_step1_secure_the_master` script should be run first.
 This script will perform the following actions:
 
   * Stop the Puppet Master (Apache)
-  * Issue a new SSL cert for the master with a unique name
-  * Issue a new CA with a unique name
-  * Swap the new CA into place.
-  * Reconfigure fileserver and puppet.conf on the master to use the new name.
-  * Start things back up.
+  * Make a backup copy of all the files that will be modified.  This backup
+    will be located at `/etc/puppetlabs/cve20113872.orig.tar.gz`
+  * Turn off the `certdnsnames` option if it is enabled in puppet.conf.
+  * Issue a new SSL cert for the master with the intermediate DNS name.
+  * Configure Apache to use the new SSL certificate with the intermediate DNS name.
+  * Generate a new CA with a different name from the existing CA.
+  * Swap the new CA into place on the Puppet Master.
+  * Reconfigure puppet on the master to connect to the intermediate DNS name.
+  * Start everything back up.
 
-At this point, existing Puppet Agent's should be able to reconnect to the master with a simple:
+At the end of step1, existing Puppet Agents should be able to reconnect to the
+master as normal:
 
-    puppet agent --test --server puppetmaster.new
+    puppet agent --test
 
-e.g. the only change to clients is the server configuration setting.
+However, they will not detect a MITM attack unless they use the new DNS name, e.g.
 
-# Migrate an Agent #
+    puppet agent --test --server puppetmaster.intermediate.dns.name
 
-Once all of the Agents has been configured to use the new dns name, securing
-the fleet, they all need to be migrated to the new Certificate Authority.
+Step 2 helps you with this migration of your agents from the existing DNS name
+to the new DNS name.
 
-A fairly clean Puppet Module providing a set of facts and a small class
-performs this migration.  The overall strategy is to move the agent $ssldir out
-of the way and then place down a known good $localcacert and $hostcrl file.
-The Agent will then generate a new CSR the next time it connects to the master.
+## Step 2: Migrate Puppet Agents to the new DNS name and CA ##
 
-NOTE: If you checked the cve20113872 module out of source, it needs to be built
-into a Puppet Module package before running the step2\_install\_remedy\_module
-script.
+This step will help you secure your Puppet Infrastructure by reconfiguring all
+of your agent nodes to use the new, intermediate DNS name of the puppet master.
+In addition, the agents will be issued a new SSL certificate that does not
+contain the certdnsnames of the master.
 
-    cd /vagrant/modules/cve20113872
-    puppet-module build
+cve20113872 is a fairly clean Puppet Module providing a set of facts and a
+small class performs this migration.  The overall strategy is to move the agent
+$ssldir out of the way and then put a known good $localcacert and $hostcrl file
+in place.  The Agent will then generate a new CSR the next time it connects to
+the master.
 
-Now install the module into /opt/puppet/share/puppet/modules
+To enable the module by patching site.pp please run this script:
 
-    /vagrant/modules/cve20113872/bin/pe_step2_install_remedy_module
+    <modulepath>/cve20113872/bin/pe_step2_install_remedy_module
 
-This script will install the Puppet Module into
-/opt/puppet/share/puppet/modules and make sure it's included in each node's
-catalog in site.pp  To migrate an agent simply run:
+This script will make sure the class cve20113872 is included in each node's
+catalog in site.pp  Once the module is installed and the class added to all
+node catalogs we can easily migrate an agent to the new Certificate Authority:
 
-    puppet agent --test --server puppetmaster.new
-
-Then, run again to generate a new CSR:
-
-    puppet agent --test --server puppetmaster.new
+    puppet agent --test --server puppetmaster.intermediate.dns.name
 
 And sign the certificate request on the master.  This will re-issue a
 certificate that does not contain the certdnsnames problem.
@@ -66,20 +93,21 @@ certificate that does not contain the certdnsnames problem.
 
 Finally, run a third time to make sure the new certificate works.
 
-    puppet agent --test --server puppetmaster.new
+    puppet agent --test --server puppetmaster.intermediate.dns.name
 
-# Final Cut Over #
+Once all of the agents have been migrated to the new Certificate Authority and
+reconfigured to connect to the intermediate dns name, we're ready for the final
+step in the migration process.
 
-The final step in the migration process, once all Agents have been issued new
-SSL certificates by the new CA, is to replace the master's SSL certificate with
-one issued by the new CA.
+## Step 3: Final Cut Over to the new CA ##
 
-    /opt/puppet/share/puppet/modules/cve20113872/bin/pe_step3_migrate_the_master
+The final step in the migration process is to replace the master's SSL
+certificate with one issued by the new CA.
 
-This script will reconfigure the Puppet Master to move back from
-"puppetmaster.new" to "puppetmaster"  The SSL certificate for puppetmaster will
-contain the certdnsname for puppetmaster.new, but it will be issued by the new,
-trustworthy CA.
+    <modulepath>/cve20113872/bin/pe_step3_migrate_the_master
+
+This script will reconfigure the Puppet Master to move back from the
+intermediate DNS name to the original name.
 
 The fleet will refuse to connect to this new node since the fleet only trusts a
 master SSL certificate issued by the Old CA.  To operate with the master again
@@ -92,6 +120,6 @@ With these two files removed, the agent will re-download them from the master,
 thus configuring them to only trust masters with an SSL certificate issued by
 the new CA.
 
-    puppet agent --test --server puppetmaster
+    puppet agent --test
 
 EOF
