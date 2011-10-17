@@ -31,7 +31,7 @@ module Migration
       return false
     end
 
-    def agent_section_in_conf?
+    def main_section_in_conf?
       File.open(config) do |f|
         f.each_line { |l| return true if l =~ /^\s*\[main\]/ }
       end
