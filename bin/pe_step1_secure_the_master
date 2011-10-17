@@ -37,6 +37,25 @@ hostcrl="$(puppet master --configprint hostcrl)"
 # The new CA CN _must_ be different than the old CA CN
 old_ca_cn="$(puppet master --configprint ca_name)"
 
+backup="/etc/puppetlabs/cve20113872.orig.tar.gz"
+
+# Before modifying anything, make a backup
+if [[ -f "${backup}" ]]; then
+  echo "A backup already exists!  You should restore from this backup" >&2
+  echo "using the pe_restore_original_state helper script and then remove" >&2
+  echo "the backup at ${backup} before running this script again." >&2
+  exit 1
+else
+  backup_list=$(mktemp -t cve20113872.backup.lst.XXXXXXXXXX)
+  echo "${apachevhost}" >> "${backup_list}"
+  echo "${ssldir}"      >> "${backup_list}"
+  echo "${manifest}"    >> "${backup_list}"
+  echo "${puppetconf}"  >> "${backup_list}"
+  # PE Masters only run on Linux, so I'm going to assume GNU tar
+  tar --files-from "${backup_list}" -czf "${backup}"
+  echo "Backup written to: ${backup}" >&2
+fi
+
 # Make sure certdnnames are off.
 idx=0
 echo "Making sure certdnsnames are turned off ... (${puppetconf})"
@@ -95,11 +114,12 @@ echo "Moving ${ssldir} to ${oldssldir}"
 mv "${ssldir}" "${oldssldir}"
 
 # Patch the CA name setting in puppet.conf
-if ruby -e 'while gets() do; exit(0) if /^[^#]*ca_name/; end; exit 1;' "${puppetconf}"
+# This is a ruby implementation of "grep"
+if ruby -e 'while gets() do; exit(0) if /^\s*ca_name\s*=/; end; exit 1;' "${puppetconf}"
 then
   # This replacement is for the case we already have ca_name in the config file
   ruby -p -l -i.backup.${timestamp}.${idx} -e \
-    'gsub(/^(\s*)([^#]*ca_name)(.*=\s*)(.*)$/) { "#{$1}# CVE-2011-3872 Previous Name: #{$4}\n#{$1}ca_name = '"'Puppet CA: ${new_master_cert}'"'" }' \
+    'gsub(/^(\s*)(\s*ca_name)(\s*=\s*)(.*)$/) { "#{$1}# CVE-2011-3872 Previous Name: #{$4}\n#{$1}ca_name = '"'Puppet CA: ${new_master_cert}'"'" }' \
     "${puppetconf}"
   ((idx++))
 else
