@@ -48,6 +48,8 @@ class cve20113872 {
   validate_re($agent_pidfile, "^/.*?\.pid$")
   # Certname can be anything, but it can't be empty.
   validate_re($agent_certname, ".")
+  # Agent's PID to reload it mid-run
+  validate_re($agent_pid, '^\d+$')
 
   Exec { path => "/opt/puppet/bin:/usr/local/bin:/bin:/usr/bin:/sbin:/usr/sbin" }
   File {
@@ -94,8 +96,7 @@ class cve20113872 {
       content => file("${master_ssldir}/crl_bundle.pem"),
     }
     exec { "CVE-2011-3872 Reload":
-      command => "cat '${agent_pidfile}' | xargs kill -HUP",
-      onlyif  => "test -f '${agent_pidfile}'",
+      command => "kill -HUP ${agent_pid}",
     }
   }
 }
