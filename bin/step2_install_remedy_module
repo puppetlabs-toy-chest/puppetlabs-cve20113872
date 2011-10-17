@@ -7,6 +7,7 @@ module="cve20113872"
 
 manifest="$(puppet master --configprint manifest)"
 
+# JJM - REVISIT - This should really be "step 0" (The user gets the module after reading the CVE)
 echo "Installing Puppet CVE-2011-3872 CA Migration Module ..."
 cd /opt/puppet/share/puppet/modules
 puppet-module clean
