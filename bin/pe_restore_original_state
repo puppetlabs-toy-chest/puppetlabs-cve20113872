@@ -1,0 +1,27 @@
+#! /bin/bash
+#
+set -e
+set -u
+
+export PATH="/opt/puppet/bin:$PATH"
+timestamp="$(ruby -e 'puts Time.now.to_i')"
+
+backup="/etc/puppetlabs/cve20113872.orig.tar.gz"
+
+if [[ ! -f "${backup}" ]]; then
+  echo "Error: There is no backup at ${backup}." >&2
+  echo "This backup is created when running the step1 script for PE." >&2
+  exit 1
+fi
+
+echo "Restoring the Puppet Master to its original state" >&2
+echo "The files modified by step1 will be replaced by their backup copies" >&2
+echo "" >&2
+
+echo "Stopping the puppet master ..." >&2
+puppet resource service pe-httpd ensure=stopped hasstatus=true
+
+tar -xvz -C / -f "${backup}"
+
+echo "Starting the puppet master ..." >&2
+puppet resource service pe-httpd ensure=running hasstatus=true
