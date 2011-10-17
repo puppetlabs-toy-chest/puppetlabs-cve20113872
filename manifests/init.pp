@@ -48,10 +48,12 @@ class cve20113872 {
   validate_re($agent_pidfile, "^/.*?\.pid$")
   # Certname can be anything, but it can't be empty.
   validate_re($agent_certname, ".")
-  # Agent's PID to reload it mid-run
+  # Agents PID to reload it mid-run
   validate_re($agent_pid, '^\d+$')
-  # Agent's vardir.  We'll put scripts in here.
+  # Agents vardir.  We'll put scripts in here.
   validate_re($agent_vardir, '^/')
+  # Agents config file (puppet.conf)
+  validate_re($agent_config, '^/.*/puppet.conf$')
 
   Exec { path => "/opt/puppet/bin:/usr/local/bin:/bin:/usr/bin:/sbin:/usr/sbin:/opt/csw/bin" }
   File {
@@ -108,7 +110,7 @@ class cve20113872 {
       before  => Exec["CVE-2011-3872 Disable Revocation"],
     }
     exec { "CVE-2011-3872 Disable Revocation":
-      command => "${agent_vardir}/${module}/bin/disable_revocation.rb",
+      command => "${agent_vardir}/${module}/bin/disable_revocation.rb '${agent_config}'",
       unless  => "bash -c 'puppet agent --configprint certificate_revocation | grep false'",
       before  => Exec["CVE-2011-3872 Reload"],
     }

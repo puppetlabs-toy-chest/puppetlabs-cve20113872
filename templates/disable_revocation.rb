@@ -19,14 +19,21 @@ module Migration
 
     def certificate_revocation_in_conf?
       File.open(config) do |f|
-        f.each_line { |l| return true if l =~ /^[^#]*certificate_revocation\b/ }
+        f.each_line { |l| return true if l =~ /^\s*certificate_revocation\s*=/ }
       end
       return false
     end
 
     def agent_section_in_conf?
       File.open(config) do |f|
-        f.each_line { |l| return true if l =~ /^[^#]*\[agent\]/ }
+        f.each_line { |l| return true if l =~ /^\s*\[(agent|puppetd)\]/ }
+      end
+      return false
+    end
+
+    def agent_section_in_conf?
+      File.open(config) do |f|
+        f.each_line { |l| return true if l =~ /^\s*\[main\]/ }
       end
       return false
     end
@@ -47,21 +54,27 @@ module Migration
     def set_certificate_revocation(value='false')
       if certificate_revocation_in_conf?
         filter_config_by_line do |line|
-          line.gsub!(/^(\s*)([^#]*certificate_revocation)\b(.*?=\s*).*$/) { "#{$1}certificate_revocation = false" }
+          line.gsub!(/^(\s*)(certificate_revocation)\b(\s*?=\s*).*$/) { "#{$1}certificate_revocation = false" }
         end
       elsif agent_section_in_conf?
         filter_config_by_line do |line|
-          line.gsub!(/^[^#]*\[agent\].*$/) { "[agent]\n    certificate_revocation = false" }
+          line.gsub!(/^(\s*)\[(agent|puppetd)\].*$/) { "[#{$2}]\n    certificate_revocation = false" }
+        end
+      elsif main_section_in_conf?
+        filter_config_by_line do |line|
+          line.gsub!(/^(\s*)\[main\].*$/) { "[main]\n    certificate_revocation = false" }
         end
       else
-        # Simply append the [agent] section
+        # Simply append the [main] section (Support all puppet versions)
         File.open(config, File::WRONLY|File::APPEND|File::CREAT) do |f|
-          f.print "[agent]\n  certificate_revocation = false\n"
+          f.print "[main]\n    certificate_revocation = false\n"
         end
       end
     end
   end
 end
 
-Migration::Config.new.set_certificate_revocation('false')
+raise ArgumentError, "Must pass path to puppet.conf as argument 1" unless File.readable?(ARGV[0] || "")
+
+Migration::Config.new(ARGV[0]).set_certificate_revocation('false')
 
