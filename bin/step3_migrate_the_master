@@ -6,16 +6,35 @@ set -u
 
 export PATH="/opt/puppet/bin:$PATH"
 
+if [[ -z "${1:-}" ]]; then
+  echo "You must specify the intermediate master certname as argument 1" >&2
+  echo "e.g. $(basename ${0}) puppetmaster.new puppetmaster" >&2
+  exit 1
+else
+  master_certname="${1}"
+  shift
+fi
+if [[ -z "${1:-}" ]]; then
+  echo "You must specify the final master certname as argument 2" >&2
+  echo "e.g. $(basename ${0}) puppetmaster.new puppetmaster" >&2
+  exit 2
+else
+  master_certname_new="${1}"
+  shift
+fi
+
+echo "Migrating Puppet Master from ${master_certname} to ${master_certname_new} ..." >&2
+
+if [[ "${master_certname}" == "${master_certname_new}" ]]; then
+  echo "ERROR: The intermediate and final names cannot be the same!" >&2
+  exit 3
+fi
+
 timestamp="$(ruby -e 'puts Time.now.to_i')"
 
 puppet resource service pe-httpd ensure=stopped hasstatus=true
 
-master_certname_new="${1:-puppetmaster}"
-master_certname="$(puppet master --configprint certname)"
-
 apachevhost="/etc/puppetlabs/httpd/conf.d/puppetmaster.conf"
-
-echo "Migrating Puppet Master from ${master_certname} to ${master_certname_new} ..." >&2
 
 master_confdir="$(puppet master --configprint confdir)"
 master_ssldir="$(puppet master --configprint ssldir)"
