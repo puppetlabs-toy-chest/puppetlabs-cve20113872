@@ -5,6 +5,12 @@ set -u
 
 export PATH="/opt/puppet/bin:$PATH"
 
+# Check if the master is running.
+if [[ -f $(puppet master --configprint pidfile) ]]; then
+  echo "You must stop your Webrick puppet master before running this script" >&2
+  exit 1
+fi
+
 # The intermediate certificate name is a required argument
 if [[ -z "${1:-}" ]]; then
   echo "You must specify the intermediate master certname as argument 1" >&2
@@ -17,15 +23,12 @@ fi
 
 timestamp="$(ruby -e 'puts Time.now.to_i')"
 
-puppet resource service pe-httpd ensure=stopped hasstatus=true
 
 # As LAK points out, configuring Puppet to communicate with a master
 # using a name that is not in CN or CERTDNSNAMES will secure the
 # entire system again.
 # We need a new certificate to do this...
 old_master_cert="$(puppet master --configprint certname)"
-
-apachevhost="/etc/puppetlabs/httpd/conf.d/puppetmaster.conf"
 
 confdir="$(puppet master --configprint confdir)"
 ssldir="$(puppet master --configprint ssldir)"
@@ -47,7 +50,6 @@ if [[ -f "${backup}" ]]; then
   exit 1
 else
   backup_list=$(mktemp -t cve20113872.backup.lst.XXXXXXXXXX)
-  echo "${apachevhost}" >> "${backup_list}"
   echo "${ssldir}"      >> "${backup_list}"
   echo "${manifest}"    >> "${backup_list}"
   echo "${puppetconf}"  >> "${backup_list}"
@@ -56,52 +58,16 @@ else
   echo "Backup written to: ${backup}" >&2
 fi
 
+# Note: There are ordering differences between the Apache/Passenger process
+# and this one, as we have to fiddle with settings after generating the new
+# SSL infrastructure.
+
 # Make sure certdnnames are off.
 idx=0
 echo "Making sure certdnsnames are turned off ... (${puppetconf})"
 ruby -p -l -i.backup.${timestamp}.${idx} -e \
   'gsub(/^(\s*)(certdnsnames\b.*$)/) { "#{$1}# Disabled to mitigate CVE-2011-3872\n#{$1}# #{$2}" }' \
   "${puppetconf}"
-((idx++))
-
-# Replace the old master name with the new master name
-echo "Reconfiguring puppet.conf to switch server names..."
-ruby -p -l -i.backup.${timestamp}.${idx} -e \
-  'gsub(/^(\s*)([^#]*?server.*?=)(\s*)('"${old_master_cert}"')\s*$/) { "#{$1}# Name Fix: #{$4} => '"${new_master_cert}"'\n#{$1}#{$2}#{$3}'"${new_master_cert}"'" }' \
-  "${puppetconf}"
-((idx++))
-
-# PE configures the fileserver using the old name by default in site.pp  We need to fix this
-echo "Patching site.pp to update fileserver resources ..."
-ruby -p -l -i.backup.${timestamp}.${idx} -e \
-  'gsub(/\b(server\s*=>\s*.*?)('"${old_master_cert}"')(\W*)/) { "#{$1}'"${new_master_cert}"'#{$3}" }' \
-  "${manifest}"
-((idx++))
-
-echo "Patching $apachevhost ..."
-# Reconfigure PE Apache to use the new master SSL certificate
-ruby -p -l -i.backup.${timestamp}.${idx} -e \
-  'gsub(/^(\s*?)(SSLCertificateFile\s+)(.*)$/) { "#{$1}# CVE-2011-3872 Fix (Was: #{$3})\n#{$1}#{$2}'"${ssldir}/certs/${new_master_cert}.pem"'" }' \
-  "${apachevhost}"
-((idx++))
-ruby -p -l -i.backup.${timestamp}.${idx} -e \
-  'gsub(/^(\s*?)(SSLCertificateKeyFile\s+)(.*)$/) { "#{$1}# CVE-2011-3872 Fix (Was: #{$3})\n#{$1}#{$2}'"${ssldir}/private_keys/${new_master_cert}.pem"'" }' \
-  "${apachevhost}"
-((idx++))
-# Reconfigure PE Apache to use the CRL Bundle
-ruby -p -l -i.backup.${timestamp}.${idx} -e \
-  'gsub(/^(\s*?)(SSLCARevocationFile\s+)(.*)$/) { "#{$1}# CVE-2011-3872 Fix (Was: #{$3})\n#{$1}#{$2}'"${ssldir}/crl_bundle.pem"'" }' \
-  "${apachevhost}"
-((idx++))
-# Reconfigure PE Apache to authenticate the Old CA AND the New CA
-ruby -p -l -i.backup.${timestamp}.${idx} -e \
-  'gsub(/^(\s*?)(SSLCACertificateFile\s+)(.*)$/) { "#{$1}# CVE-2011-3872 Fix (Was: #{$3})\n#{$1}#{$2}'"${ssldir}/certs/ca_bundle.pem"'" }' \
-  "${apachevhost}"
-((idx++))
-# This isn't strictly necessary since we only use self signed CA's and not chained CA's
-ruby -p -l -i.backup.${timestamp}.${idx} -e \
-  'gsub(/^(\s*?)(SSLCertificateChainFile\s+)(.*)$/) { "#{$1}# CVE-2011-3872 Fix (Was: #{$3})\n#{$1}#{$2}'"${ssldir}/certs/ca_bundle.pem"'" }' \
-  "${apachevhost}"
 ((idx++))
 
 # Generate the new SSL certificate using the old CA
@@ -113,7 +79,9 @@ oldssldir="${ssldir}.previous"
 echo "Moving ${ssldir} to ${oldssldir}"
 mv "${ssldir}" "${oldssldir}"
 
+
 # Patch the CA name setting in puppet.conf
+# This must be done before the new CA is initialized.
 # This is a ruby implementation of "grep"
 if ruby -e 'while gets() do; exit(0) if /^\s*ca_name\s*=/; end; exit 1;' "${puppetconf}"
 then
@@ -138,6 +106,69 @@ echo "Generating the new CA ..."
 # once all of the agents have been migrated.
 puppet cert --generate --certdnsnames "${new_master_cert}" "${old_master_cert}"
 
+# Replace the old master name with the new master name
+echo "Reconfiguring puppet.conf to switch server names..."
+ruby -p -l -i.backup.${timestamp}.${idx} -e \
+  'gsub(/^(\s*)([^#]*?server.*?=)(\s*)('"${old_master_cert}"')\s*$/) { "#{$1}# Name Fix: #{$4} => '"${new_master_cert}"'\n#{$1}#{$2}#{$3}'"${new_master_cert}"'" }' \
+  "${puppetconf}"
+((idx++))
+
+# PE configures the fileserver using the old name by default in site.pp  We need to fix this
+echo "Patching site.pp to update fileserver resources ..."
+ruby -p -l -i.backup.${timestamp}.${idx} -e \
+  'gsub(/\b(server\s*=>\s*.*?)('"${old_master_cert}"')(\W*)/) { "#{$1}'"${new_master_cert}"'#{$3}" }' \
+  "${manifest}"
+((idx++))
+
+# TODO(nigel): this might end up being replaced by Jeff doing the same work
+# where he updates puppet.conf to have the same settings as we're applying
+# for Apache in the PE script.
+
+echo "Patching puppet.conf to update certname setting ..."
+ruby -p -l -i.backup.${timestamp}.${idx} -e \
+  'gsub(/^(\s*)([^#]*?certname.*?=)(\s*)('"${old_master_cert}"')\s*$/) { "#{$1}# Name Fix: #{$4} => '"${new_master_cert}"'\n#{$1}#{$2}#{$3}'"${new_master_cert}"'" }' \
+  "${puppetconf}"
+((idx++))
+
+
+# Patch the cacrl setting in puppet.conf
+# This is a ruby implementation of "grep"
+if ruby -e 'while gets() do; exit(0) if /^\s*cacrl\s*=/; end; exit 1;' "${puppetconf}"
+then
+  # This replacement is for the case we already have cacrl in the config file
+  ruby -p -l -i.backup.${timestamp}.${idx} -e \
+    'gsub(/^(\s*)(\s*cacrl)(\s*=\s*)(.*)$/) { "#{$1}# CVE-2011-3872 Previous CRL: #{$4}\n#{$1}cacrl = '"${ssldir}/crl_bundle.pem"'" }' \
+    "${puppetconf}"
+  ((idx++))
+else
+  echo "Adding cacrl setting to [main] in puppet.conf ..." >&2
+  # This replacement is for when we need to add cacrl to the config file
+  ruby -p -l -i.backup.${timestamp}.${idx} -e \
+    'gsub(/^(\s*)(\[main\].*)$/) { "#{$2}\n    # CVE-2011-3872\n    cacrl = '"${ssldir}/crl_bundle.pem"'" }' \
+    "${puppetconf}"
+  ((idx++))
+fi
+
+# Patch the localcacert setting in puppet.conf
+# This is a ruby implementation of "grep"
+if ruby -e 'while gets() do; exit(0) if /^\s*localcacert\s*=/; end; exit 1;' "${puppetconf}"
+then
+  # This replacement is for the case we already have localcacert in the config file
+  ruby -p -l -i.backup.${timestamp}.${idx} -e \
+    'gsub(/^(\s*)(\s*localcacert)(\s*=\s*)(.*)$/) { "#{$1}# CVE-2011-3872 Previous localcacert: #{$4}\n#{$1}localcacert = '"${ssldir}/certs/ca_bundle.pem"'" }' \
+    "${puppetconf}"
+  ((idx++))
+else
+  echo "Adding localcacert setting to [main] in puppet.conf ..." >&2
+  # This replacement is for when we need to add localcacert to the config file
+  ruby -p -l -i.backup.${timestamp}.${idx} -e \
+    'gsub(/^(\s*)(\[main\].*)$/) { "#{$2}\n    # CVE-2011-3872\n    localcacert = '"${ssldir}/certs/ca_bundle.pem"'" }' \
+    "${puppetconf}"
+  ((idx++))
+fi
+
+
+
 # Copy the new, secure SSL certificate generated by the OLD CA into the location
 # used by the PE Apache server
 echo "Copying puppet master's secured certificate into place..."
@@ -161,12 +192,13 @@ cp -p "${oldssldir}"/certs/ca.pem "${ssldir}"/certs/ca_previous.pem
 cp -p "${ssldir}/certs/ca_bundle.pem" "${ssldir}/certs/ca.pem"
 cp -p "${ssldir}/crl_bundle.pem" "${ssldir}/crl.pem"
 
-# At this point, existing agents should be able to communicate with the master.  New certificates
-# will be signed by the new CA.
-puppet resource service pe-httpd ensure=running hasstatus=true
-
-# Run Puppet Agent so that MCollective Self-Heals itself.
-puppet agent --test
+echo ""
+echo "NIGEL knows these comments need love"
+echo "You need to start the master yourself here"
+echo "with a command like:"
+echo "puppet master --no-daemonize --verbose"
+echo "or however you're running webrick"
+echo ""
 
 echo ""
 echo "Your master has been reconfigured with a new name to mitigate CVE-2011-3872"
