@@ -1,0 +1,20 @@
+#! /bin/bash
+#
+
+export PATH="/opt/puppet/bin:$PATH"
+timestamp="$(ruby -e 'puts Time.now.to_i')"
+module="cve20113872"
+
+manifest="$(puppet master --configprint manifest)"
+
+if grep -q "include ${module}" "${manifest}"; then
+  echo "site.pp already includes class ${module} ... (Nothing to do)"
+else
+  echo "Adding ${module} to the default node in site.pp ..."
+  idx=0
+  ruby -p -l -i.backup.${timestamp}.${idx} -e \
+    'gsub(/^(\s*)(node\s+default\s+\{\s*)$/) { "#{$1}#{$2}\n#{$1}  # CVE-2011-3872 CA Migration Class\n#{$1}  include '"${module}"'" }' \
+    "${manifest}"
+fi
+
+echo "Done ..."
