@@ -8,4 +8,4 @@ description 'This module provides tools to help close the security risk document
 project_page 'http://www.puppetlabs.com'
 
 ## Add dependencies, if any:
-dependency 'puppetlabs/stdlib', '>= 2.0.0'
+# dependency 'puppetlabs/stdlib', '>= 2.0.0'
