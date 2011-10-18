@@ -6,6 +6,12 @@ set -u
 
 export PATH="/opt/puppet/bin:$PATH"
 
+# Check if the master is running.
+if [[ -f $(puppet master --configprint pidfile) ]]; then
+  echo "You must stop your Webrick puppet master before running this script" >&2
+  exit 1
+fi
+
 if [[ -z "${1:-}" ]]; then
   echo "You must specify the intermediate master certname as argument 1" >&2
   echo "e.g. $(basename ${0}) puppetmaster.new puppetmaster" >&2
@@ -32,9 +38,6 @@ fi
 
 timestamp="$(ruby -e 'puts Time.now.to_i')"
 
-puppet resource service pe-httpd ensure=stopped hasstatus=true
-
-apachevhost="/etc/puppetlabs/httpd/conf.d/puppetmaster.conf"
 
 master_confdir="$(puppet master --configprint confdir)"
 master_ssldir="$(puppet master --configprint ssldir)"
@@ -45,10 +48,6 @@ master_manifest="$(puppet master --configprint manifest)"
 
 echo "Reconfiguring Puppet Enterprise SSL Server ..." >&2
 idx=0
-# Reconfigure Apache to use the old DNS name.
-perl -p -l -i.backup."${timestamp}.${idx}" -e \
-  "s,^([^#]*/)${master_certname}.pem,"'$1'"${master_certname_new}.pem,g" "${apachevhost}"
-((idx++))
 # Reconfigure Apache to trust ONLY agents with certificates issued by our new CA.
 cp -p "${master_cadir}/ca_crt.pem" "${master_ssldir}/certs/ca.pem"
 # This target file is the file Apache uses to authenticate clients as configured in step1
@@ -70,11 +69,9 @@ perl -p -l -i.backup."${timestamp}.${idx}" -e \
 echo "The Puppet Master on https://${master_certname_new}:8140/ has been configured to only" >&2
 echo "authenticate agents with a certificate issued by the new CA." >&2
 
-puppet resource service pe-httpd ensure=running hasstatus=true
-
 # Configuring the Puppet Agent to trust the new CA only:
 rm -f "$(puppet agent --configprint localcacert)"
 rm -f "$(puppet agent --configprint hostcrl)"
 
-puppet agent --test --server ${master_certname_new}
 
+echo "You need to start the master and agent by hand now"
