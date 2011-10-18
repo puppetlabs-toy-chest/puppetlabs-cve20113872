@@ -111,7 +111,7 @@ class cve20113872 {
     }
     exec { "CVE-2011-3872 Disable Revocation":
       command => "${agent_vardir}/${module}/bin/disable_revocation.rb '${agent_config}'",
-      unless  => "bash -c 'puppet agent --configprint certificate_revocation | grep false'",
+      unless  => "sh -c 'puppet agent --configprint certificate_revocation | grep false'",
       before  => Exec["CVE-2011-3872 Reload"],
     }
     exec { "CVE-2011-3872 Reload":
