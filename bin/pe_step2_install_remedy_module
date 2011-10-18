@@ -7,12 +7,6 @@ module="cve20113872"
 
 manifest="$(puppet master --configprint manifest)"
 
-# JJM - REVISIT - This should really be "step 0" (The user gets the module after reading the CVE)
-echo "Installing Puppet CVE-2011-3872 CA Migration Module ..."
-cd /opt/puppet/share/puppet/modules
-puppet-module clean
-puppet-module install /vagrant/modules/${module}/pkg/puppetlabs-${module}-0.0.1.tar.gz --force
-
 if grep -q "include ${module}" "${manifest}"; then
   echo "site.pp already includes class ${module} ... (Nothing to do)"
 else
