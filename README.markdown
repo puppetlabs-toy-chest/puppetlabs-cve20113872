@@ -5,7 +5,16 @@ This module provides two main pieces of functionality:
  * Help me get secure
  * Once secure, help me migrate to a new CA
 
-# Quick Start (PE) #
+# Quick Start #
+
+This module is designed to be installed from the Forge, but until then:
+
+    cd /tmp
+    git clone git@github.com:puppetlabs/puppetlabs-cve20113872.git cve20113872
+    cd cve20113872
+    rake build
+    cd <modulepath>
+    puppet-module install /tmp/cve20113872/pkg/puppetlabs-cve20113872-0.0.1.tar.gz
 
 ## Install the Module ##
 
@@ -13,9 +22,10 @@ The first step in the remediation process is to install the cve20113872 module
 into your Puppet Master module path.  This will likely be /etc/puppet/modules
 or /etc/puppetlabs/puppet/modules for Puppet Enterprise.
 
-(Note, if the module is not yet on the forge, it may be built from source using
-`puppet-module build`)
+Note, if the module is not yet on the forge, it may be built from source using
+the build task:
 
+    rake build
     cd /etc/puppetlabs/puppet/modules
     puppet-module install /tmp/puppetlabs-cve20113872-0.0.1.tar.gz
 
