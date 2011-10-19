@@ -6,6 +6,7 @@ module Facter
     extend Facter::Util::WithPuppet
     def self.add_settings_facts(settings = nil)
       settings ||= [
+        :server,
         :localcacert,
         :hostcrl,
         :certdir,
