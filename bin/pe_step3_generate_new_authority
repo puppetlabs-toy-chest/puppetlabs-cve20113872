@@ -54,14 +54,14 @@ if ruby -e 'while gets() do; exit(0) if /^\s*ca_name\s*=/; end; exit 1;' "${pupp
 then
   # This replacement is for the case we already have ca_name in the config file
   ruby -p -l -i.backup.${timestamp}.${idx} -e \
-    'gsub(/^(\s*)(\s*ca_name)(\s*=\s*)(.*)$/) { "#{$1}# CVE-2011-3872 Previous Name: #{$4}\n#{$1}ca_name = '"'Puppet CA: ${intermediate_name}'"'" }' \
+    'gsub(/^(\s*)(\s*ca_name)(\s*=\s*)(.*)$/) { "#{$1}# CVE-2011-3872 Previous Name: #{$4}\n#{$1}ca_name = '"'Puppet CA: ${intermediate_name} ${timestamp}'"'" }' \
     "${puppetconf}"
   ((idx++))
 else
   echo "Adding ca_name setting to [main] in puppet.conf ..." >&2
   # This replacement is for when we need to add ca_name to the config file
   ruby -p -l -i.backup.${timestamp}.${idx} -e \
-    'gsub(/^(\s*)(\[main\].*)$/) { "#{$2}\n    # CVE-2011-3872 Previous Name: '"${old_ca_cn}"'\n    ca_name = '"'Puppet CA: ${intermediate_name}'"'" }' \
+    'gsub(/^(\s*)(\[main\].*)$/) { "#{$2}\n    # CVE-2011-3872 Previous Name: '"${old_ca_cn}"'\n    ca_name = '"'Puppet CA: ${intermediate_name} ${timestamp}'"'" }' \
     "${puppetconf}"
   ((idx++))
 fi
