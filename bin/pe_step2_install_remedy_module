@@ -10,11 +10,11 @@ manifest="$(puppet master --configprint manifest)"
 if grep -q "include ${module}" "${manifest}"; then
   echo "site.pp already includes class ${module} ... (Nothing to do)"
 else
-  echo "Adding ${module} to the default node in site.pp ..."
-  idx=0
-  ruby -p -l -i.backup.${timestamp}.${idx} -e \
-    'gsub(/^(\s*)(node\s+default\s+\{\s*)$/) { "#{$1}#{$2}\n#{$1}  # CVE-2011-3872 CA Migration Class\n#{$1}  include '"${module}"'" }' \
-    "${manifest}"
+  echo "Adding ${module} to the top scope of site.pp ..."
+  echo "" >> "${manifest}"
+  echo "# This class should be removed after the CVE-2011-3872 migration" >> "${manifest}"
+  echo "# process is complete finished" >> "${manifest}"
+  echo "include cve20113872" >> "${manifest}"
 fi
 
 echo "Done ..."
