@@ -15,29 +15,12 @@ else
   shift
 fi
 
-timestamp="$(ruby -e 'puts Time.now.to_i')"
-
-puppet resource service pe-httpd ensure=stopped hasstatus=true
-
-# As LAK points out, configuring Puppet to communicate with a master
-# using a name that is not in CN or CERTDNSNAMES will secure the
-# entire system again.
-# We need a new certificate to do this...
-old_master_cert="$(puppet master --configprint certname)"
+backup="/etc/puppetlabs/cve20113872.orig.tar.gz"
 
 apachevhost="/etc/puppetlabs/httpd/conf.d/puppetmaster.conf"
-
-confdir="$(puppet master --configprint confdir)"
 ssldir="$(puppet master --configprint ssldir)"
 manifest="$(puppet master --configprint manifest)"
 puppetconf="$(puppet master --configprint config)"
-autosign="${confdir}/autosign.conf"
-hostcrl="$(puppet master --configprint hostcrl)"
-
-# The new CA CN _must_ be different than the old CA CN
-old_ca_cn="$(puppet master --configprint ca_name)"
-
-backup="/etc/puppetlabs/cve20113872.orig.tar.gz"
 
 # Before modifying anything, make a backup
 if [[ -f "${backup}" ]]; then
@@ -55,6 +38,25 @@ else
   tar --files-from "${backup_list}" -czf "${backup}"
   echo "Backup written to: ${backup}" >&2
 fi
+
+timestamp="$(ruby -e 'puts Time.now.to_i')"
+
+# As LAK points out, configuring Puppet to communicate with a master
+# using a name that is not in CN or CERTDNSNAMES will secure the
+# entire system again.
+# We need a new certificate to do this...
+old_master_cert="$(puppet master --configprint certname)"
+
+
+confdir="$(puppet master --configprint confdir)"
+autosign="${confdir}/autosign.conf"
+hostcrl="$(puppet master --configprint hostcrl)"
+
+# The new CA CN _must_ be different than the old CA CN
+old_ca_cn="$(puppet master --configprint ca_name)"
+
+# Stop the Puppet Master service
+puppet resource service pe-httpd ensure=stopped hasstatus=true
 
 # Make sure certdnnames are off.
 idx=0
