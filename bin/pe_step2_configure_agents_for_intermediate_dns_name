@@ -32,10 +32,28 @@ idx=0
 # Replace the old master name with the new master name.  This reconfigures the
 # agent on the puppet master to use the intermediate DNS name.
 echo -n "Reconfiguring puppet.conf to connect to the master using intermediate dns name ${new_master_cert} ..." >&2
-ruby -p -l -i.backup.${timestamp}.${idx} -e \
-  'gsub(/^(\s*)([^#]*?server.*?=)(\s*)('"${old_master_cert}"')\s*$/) { "#{$1}# Name Fix: #{$4} => '"${new_master_cert}"'\n#{$1}#{$2}#{$3}'"${new_master_cert}"'" }' \
-  "${puppetconf}"
-((idx++))
+# Use genconfig to figure out if server is set in puppet.conf
+if puppet agent --genconfig | grep -q '# server ='; then
+  # server is not in puppet.conf.  If they have a [main], then use that, otherwise add [main]
+  if grep -q '^\[main\]' "${puppetconf}"; then
+    ruby -p -l -i.backup.${timestamp}.${idx} -e \
+      'gsub(/^\[main\].*/) { "[main]\n    server = '"${new_master_cert}"'" }' \
+      "${puppetconf}"
+    ((idx++))
+  else
+    cp -p "${puppetconf}" "${puppetconf}.backup.${timestamp}.${idx}"
+    ((idx++))
+    echo '[main]' >> "${puppetconf}"
+    echo "    server = ${new_master_cert}" >> "${puppetconf}"
+  fi
+else
+  # server is in puppet.conf.  Replace _all_ instances of the server setting in
+  # puppet.conf
+  ruby -p -l -i.backup.${timestamp}.${idx} -e \
+    'gsub(/^(\s*)(server.*?=)(\s*)('"${old_master_cert}"')\s*$/) { "#{$1}server = '"${new_master_cert}"'" }' \
+    "${puppetconf}"
+  ((idx++))
+fi
 echo "done." >&2
 
 # PE configures the fileserver using the old name by default in site.pp  We need to fix this
