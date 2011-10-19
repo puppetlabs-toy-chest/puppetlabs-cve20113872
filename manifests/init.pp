@@ -31,29 +31,29 @@ class cve20113872 {
   $module = "cve20113872"
 
   # The certificate has /CN=Puppet CA: $hostname
-  validate_re($agent_cert_on_disk_issuer, "^/CN=")
+  cve20113872_validate_re($agent_cert_on_disk_issuer, "^/CN=")
   # pe-puppet or puppet
-  validate_re($agent_user, "puppet")
+  cve20113872_validate_re($agent_user, "puppet")
   # pe-puppet or puppet
-  validate_re($agent_group, "puppet")
+  cve20113872_validate_re($agent_group, "puppet")
   # /etc/puppetlabs/puppet/ssl
-  validate_re($agent_ssldir, '^/')
+  cve20113872_validate_re($agent_ssldir, '^/')
   # /etc/puppetlabs/puppet/ssl/certs
-  validate_re($agent_certdir, '^/')
+  cve20113872_validate_re($agent_certdir, '^/')
   # /etc/puppetlabs/puppet/ssl/certs/ca.pem
-  validate_re($agent_localcacert, "^/.*?\.pem$")
+  cve20113872_validate_re($agent_localcacert, "^/.*?\.pem$")
   # /etc/puppetlabs/puppet/ssl/crl.pem
-  validate_re($agent_hostcrl, "^/.*?\.pem$")
+  cve20113872_validate_re($agent_hostcrl, "^/.*?\.pem$")
   # /var/run/pe-puppet/agent.pid
-  validate_re($agent_pidfile, "^/.*?\.pid$")
+  cve20113872_validate_re($agent_pidfile, "^/.*?\.pid$")
   # Certname can be anything, but it can't be empty.
-  validate_re($agent_certname, ".")
+  cve20113872_validate_re($agent_certname, ".")
   # Agents PID to reload it mid-run
-  validate_re($agent_pid, '^\d+$')
+  cve20113872_validate_re($agent_pid, '^\d+$')
   # Agents vardir.  We'll put scripts in here.
-  validate_re($agent_vardir, '^/')
+  cve20113872_validate_re($agent_vardir, '^/')
   # Agents config file (puppet.conf)
-  validate_re($agent_config, '^/.*/puppet.conf$')
+  cve20113872_validate_re($agent_config, '^/.*/puppet.conf$')
 
   Exec { path => "/opt/puppet/bin:/usr/local/bin:/bin:/usr/bin:/sbin:/usr/sbin:/opt/csw/bin" }
   File {
