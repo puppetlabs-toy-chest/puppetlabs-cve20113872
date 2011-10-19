@@ -84,36 +84,19 @@ for d in certs private_keys public_keys; do
   cp -p "${oldssldir}/${d}/${certname}.pem" "${ssldir}/${d}/${certname}.pem"
 done
 
-# Configure Apache to trust old clients:
-# JJM - We're using a "ca_bundle and crl_bundle" which Puppet doesn't
-# know anything about to make it easier to "clean up" after the migration.
-cat "${ssldir}"/certs/ca.pem > "${ssldir}/certs/ca_bundle.pem"
-cat "${oldssldir}"/certs/ca.pem  >> "${ssldir}"/certs/ca_bundle.pem
-chmod 644 "${ssldir}"/certs/ca_bundle.pem
-# JJM: FIXME (Puppet) The ORDER IS IMPORTANT.  The Agent appears to only read the first CRL in this bundle...  =(
-cat "${oldssldir}"/crl.pem > "${ssldir}"/crl_bundle.pem
-cat "${ssldir}"/crl.pem >> "${ssldir}"/crl_bundle.pem
-chmod 644 "${ssldir}"/crl_bundle.pem
+# JJM We're appending the old certificate to the new certificate This allows us
+# to avoid hacking at the Apache configuration file.
 
-# The agent on the master needs the same bundles as the Apache server does:
-cp -p "${ssldir}/certs/ca_bundle.pem" "${ssldir}/certs/ca.pem"
-cp -p "${ssldir}/crl_bundle.pem" "${ssldir}/crl.pem"
-
-# Reconfigure PE Apache to use the CRL Bundle
-ruby -p -l -i.backup.${timestamp}.${idx} -e \
-  'gsub(/^(\s*?)(SSLCARevocationFile\s+)(.*)$/) { "#{$1}# CVE-2011-3872 Fix (Was: #{$3})\n#{$1}#{$2}'"${ssldir}/crl_bundle.pem"'" }' \
-  "${apachevhost}"
-((idx++))
-# Reconfigure PE Apache to authenticate the Old CA AND the New CA
-ruby -p -l -i.backup.${timestamp}.${idx} -e \
-  'gsub(/^(\s*?)(SSLCACertificateFile\s+)(.*)$/) { "#{$1}# CVE-2011-3872 Fix (Was: #{$3})\n#{$1}#{$2}'"${ssldir}/certs/ca_bundle.pem"'" }' \
-  "${apachevhost}"
-((idx++))
-# This isn't strictly necessary since we only use self signed CA's and not chained CA's
-ruby -p -l -i.backup.${timestamp}.${idx} -e \
-  'gsub(/^(\s*?)(SSLCertificateChainFile\s+)(.*)$/) { "#{$1}# CVE-2011-3872 Fix (Was: #{$3})\n#{$1}#{$2}'"${ssldir}/certs/ca_bundle.pem"'" }' \
-  "${apachevhost}"
-((idx++))
+echo -n "Appending previous CA certificate to the new CA certificate ..." >&2
+cat "${oldssldir}/certs/ca.pem" >> "${ssldir}/certs/ca.pem"
+# The previous CRL needs to be listed first, otherwise the agent on the master
+# gets a certificate verify failed error.
+cp -p "${ssldir}/crl.pem" "${ssldir}/crl.pem.new"
+cat "${oldssldir}/crl.pem" > "${ssldir}/crl.pem"
+cat "${ssldir}/crl.pem.new" >> "${ssldir}/crl.pem"
+# Clean up to prevent confusion
+rm -f "${ssldir}/crl.pem.new"
+echo "done." >&2
 
 echo -n "Starting Puppet Master..." >&2
 puppet resource service pe-httpd ensure=running hasstatus=true 2>&1 >/dev/null
