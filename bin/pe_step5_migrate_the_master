@@ -68,6 +68,54 @@ echo "done." >&2
 cp -p "${ssldir}/ca/ca_crt.pem" "${ssldir}/certs/ca.pem"
 cp -p "${ssldir}/ca/ca_crl.pem" "${ssldir}/crl.pem"
 
+## Dashboard Certificate ##
+#
+# This section should only run if the Puppet Dashboard is installed on the same
+# host as the Puppet Master.  It will issue a new CSR for the dashboard and
+# sign it.  If the dashboard is not on the same host as the Puppet CA, then the
+# normal rake task should be used to re-issue the dashboard certificate.
+#
+# To manually do this process (e.g. if you have Dashboard on a different host.)
+#
+#     # Clean out the existing scripts.
+#     find . -name '*.pem' -print0 | xargs -0 rm
+#     # Generate a new CSR
+#     /opt/puppet/bin/rake cert:create_key_pair
+#     /opt/puppet/bin/rake cert:request
+#     # Sign the certificate request on the master.
+#     puppet cert sign dashboard
+#     # Retrieve the signed certificate
+#     /opt/puppet/bin/rake cert:retrieve
+#     # Fix permissions (If you ran this command as root)
+#     find . -name '*.pem' -print0 | xargs -0 chown puppet-dashboard:puppet-dashboard
+
+: ${DASHBOARD_ROOT:="/opt/puppet/share/puppet-dashboard"}
+if [[ -d "${DASHBOARD_ROOT}/certs" ]]; then
+  for filetype in cert private_key ca_crl public_key ca_cert; do
+    pemfile="${DASHBOARD_ROOT}/certs/dashboard.${filetype}.pem"
+    if [[ -f "${pemfile}" ]]; then
+      cp -p "${pemfile}" "${pemfile}.previous"
+    fi
+  done
+  # Now issue the new certificate
+  echo -n "Issuing new certificate for dashboard..." >&2
+  puppet cert --generate dashboard &>/dev/null
+  # Move the private key into place.  I use a redirection to preserve the owner and permissions
+  # of the original files.
+  cat "${ssldir}/certs/dashboard.pem"        > "${DASHBOARD_ROOT}/certs/dashboard.cert.pem"
+  cat "${ssldir}/private_keys/dashboard.pem" > "${DASHBOARD_ROOT}/certs/dashboard.private_key.pem"
+  cat "${ssldir}/public_keys/dashboard.pem"  > "${DASHBOARD_ROOT}/certs/dashboard.public_key.pem"
+  # Clean up the generated dashboard cert
+  rm  "${ssldir}/certs/dashboard.pem" \
+      "${ssldir}/private_keys/dashboard.pem" \
+      "${ssldir}/public_keys/dashboard.pem"
+  # This is the new certificate only, not the bundle.
+  cat "${ssldir}/certs/ca.pem" > "${DASHBOARD_ROOT}/certs/dashboard.ca_cert.pem"
+  cat "${ssldir}/crl.pem" > "${DASHBOARD_ROOT}/certs/dashboard.ca_crl.pem"
+  echo "done." >&2
+fi
+## End Dashboard Certificate ##
+
 echo -n "Starting Puppet Master..." >&2
 puppet resource service pe-httpd ensure=running hasstatus=true &> /dev/null
 echo "done." >&2
