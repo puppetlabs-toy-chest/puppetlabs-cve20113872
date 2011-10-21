@@ -77,52 +77,64 @@ class cve20113872::step4 {
   # Otherwise, the agent will replace the CRL and CA bundle being used
   # by the PE Apache server, causing all existing agents with an "old" certificate
   # to be unauthenticated by the master.
-  if ($fact_is_puppetmaster != 'true') {
-    if ($agent_cert_on_disk_issuer != "/CN=${master_ca_cn}") {
-      notify { "CVE-2011-3872 Migration":
-        message => "Migrating ${agent_certname}",
-        before  => Exec["CVE-2011-3872 step1"],
+  case $is_migration_host {
+    "false": {
+      case $agent_cert_on_disk_issuer {
+        "/CN=${master_ca_cn}": {
+          notify { "CVE-2011-3872 Already Migrated":
+            message => "This node has already been issued a certificate by CA ${master_ca_cn}.  No migration is necessary.",
+          }
+        }
+        default: {
+          notify { "CVE-2011-3872 Migration":
+            message => "Migrating ${agent_certname}",
+            before  => Exec["CVE-2011-3872 step1"],
+          }
+          # When we generate the new CA in the step3 script, the existing SSL
+          # directory MUST be moved to the path referenced in the creates parameter
+          # otherwise the agent on the master will disable the new CA.
+          exec { "CVE-2011-3872 step1":
+            command => "mv '${agent_ssldir}' '${agent_ssldir}.previous'",
+            creates => "${agent_ssldir}.previous",
+          }
+          file { "${agent_ssldir}":
+            ensure => directory,
+            mode   => '0771',
+          }
+          file { "${agent_certdir}":
+            ensure => directory,
+            mode   => '0755',
+          }
+          # For security, give the agent the list of CA's it should trust at the same
+          # time we cause it to submit a new CSR.  This prevents a third party from
+          # Fooling the agent in trusting more CA's than it should.
+          # This resource configures the agent to trust ONLY the new CA.
+          file { "CVE-2011-3872 Trusted CA Certificates":
+            path    => "${agent_localcacert}",
+            content => file("${master_ssldir}/ca/ca_crt.pem"),
+          }
+          file { "CVE-2011-3872 Trusted CA Revocation Lists":
+            path    => "${agent_hostcrl}",
+            content => file("${master_ssldir}/ca/ca_crl.pem"),
+          }
+          # Restore the backup of the puppet.conf file if it was created in step2
+          exec { "CVE-2011-3872 Restore puppet.conf":
+            onlyif  => "sh -c \"test -f '${agent_config}.backup.${module}'\"",
+            command => "sh -c \"cp -p '${agent_config}.backup.${module}' '${agent_config}'\"",
+            notify  => Exec["CVE-2011-3872 Reload"],
+            require => File["${agent_config}.backup.${module}"],
+          }
+          # Reload the agent.  This is OK to not be idemopotent because we should only
+          # add these resources to the catalog if the agent has a certificate issued
+          # by an authority the master is not currently using.
+          exec { "CVE-2011-3872 Reload":
+            command => "kill -HUP ${agent_pid}",
+          }
+        }
       }
-      # When we generate the new CA in the step3 script, the existing SSL
-      # directory MUST be moved to the path referenced in the creates parameter
-      # otherwise the agent on the master will disable the new CA.
-      exec { "CVE-2011-3872 step1":
-        command => "mv '${agent_ssldir}' '${agent_ssldir}.previous'",
-        creates => "${agent_ssldir}.previous",
-      }
-      file { "${agent_ssldir}":
-        ensure => directory,
-        mode   => '0771',
-      }
-      file { "${agent_certdir}":
-        ensure => directory,
-        mode   => '0755',
-      }
-      # For security, give the agent the list of CA's it should trust at the same
-      # time we cause it to submit a new CSR.  This prevents a third party from
-      # Fooling the agent in trusting more CA's than it should.
-      # This resource configures the agent to trust ONLY the new CA.
-      file { "CVE-2011-3872 Trusted CA Certificates":
-        path    => "${agent_localcacert}",
-        content => file("${master_ssldir}/ca/ca_crt.pem"),
-      }
-      file { "CVE-2011-3872 Trusted CA Revocation Lists":
-        path    => "${agent_hostcrl}",
-        content => file("${master_ssldir}/ca/ca_crl.pem"),
-      }
-      # Restore the backup of the puppet.conf file if it was created in step2
-      exec { "CVE-2011-3872 Restore puppet.conf":
-        onlyif  => "sh -c \"test -f '${agent_config}.backup.${module}'\"",
-        command => "sh -c \"cp -p '${agent_config}.backup.${module}' '${agent_config}'\"",
-        notify  => Exec["CVE-2011-3872 Reload"],
-        require => File["${agent_config}.backup.${module}"],
-      }
-      # Reload the agent.  This is OK to not be idemopotent because we should only
-      # add these resources to the catalog if the agent has a certificate issued
-      # by an authority the master is not currently using.
-      exec { "CVE-2011-3872 Reload":
-        command => "kill -HUP ${agent_pid}",
-      }
+    }
+    default: {
+      notice("Not applying resources in ${module}::step4 to the migration host.")
     }
   }
 }

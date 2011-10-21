@@ -10,7 +10,7 @@ module Facter::Util::WithPuppet
         # Facter.warnonce "Could not load facts for #{Puppet[:hostcert]}: #{detail}"
       end
     else
-      "Puppet is not loaded.  Didn't do anything... :("
+      nil
     end
   end
 end
