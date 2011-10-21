@@ -56,6 +56,9 @@ else
 fi
 echo "done." >&2
 
+# Save a backup copy of site.pp to restore in step 5
+cp -p "${manifest}" "${manifest}.original"
+
 # PE configures the fileserver using the old name by default in site.pp  We need to fix this
 echo -n "Reconfiguring site.pp to connect to the master using intermediate DNS name ${new_master_cert} ..." >&2
 ruby -p -l -i.backup.${timestamp}.${idx} -e \
