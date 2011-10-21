@@ -8,10 +8,10 @@ class cve20113872 {
 
   # The certificate has /CN=Puppet CA: $hostname
   cve20113872_validate_re($agent_cert_on_disk_issuer, "^/CN=")
-  # pe-puppet or puppet
-  cve20113872_validate_re($agent_user, "puppet")
-  # pe-puppet or puppet
-  cve20113872_validate_re($agent_group, "puppet")
+  # pe-puppet or puppet, but only check for a leading word character
+  cve20113872_validate_re($agent_user, '^\w')
+  # pe-puppet or puppet, but only check for a leading word character
+  cve20113872_validate_re($agent_group, '^\w')
   # /etc/puppetlabs/puppet/ssl
   cve20113872_validate_re($agent_ssldir, '^/')
   # /etc/puppetlabs/puppet/ssl/certs
