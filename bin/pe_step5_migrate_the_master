@@ -26,6 +26,7 @@ apachevhost="/etc/puppetlabs/httpd/conf.d/puppetmaster.conf"
 vardir="$(puppet master --configprint vardir)"
 ssldir="$(puppet master --configprint ssldir)"
 certname="$(puppet master --configprint certname)"
+manifest="$(puppet master --configprint manifest)"
 
 # This is some shell magic to read a file into a variable if the
 # variable isn't already set.
@@ -116,6 +117,10 @@ if [[ -d "${DASHBOARD_ROOT}/certs" ]]; then
 fi
 ## End Dashboard Certificate ##
 
+## Restore site.pp to the original state when we started this process ##
+cp -p "${manifest}.original" "${manifest}"
+rm "${manifest}.original"
+
 echo -n "Starting Puppet Master..." >&2
 puppet resource service pe-httpd ensure=running hasstatus=true &> /dev/null
 echo "done." >&2
@@ -123,7 +128,11 @@ echo "done." >&2
 cat <<EOMESSAGE
 
 The puppet master has been issued an SSL certificate by the new CA.  The
-migration to the new CA is now complete.  Puppet agents which have been migrated
-should now be able to reconnect to this master.
+migration to the new CA is now complete.  Puppet agents which have been
+migrated should now be able to reconnect to this master.
+
+The manifest ${manifest} has been restored to its
+original state.  The cve20113872::step2 and cve20113872::step4 classes will no
+longer be included in node catalogs.
 
 EOMESSAGE
