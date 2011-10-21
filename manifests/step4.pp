@@ -32,7 +32,7 @@ class cve20113872::step4 {
   $module = "cve20113872"
 
   # The certificate has /CN=Puppet CA: $hostname
-  cve20113872_validate_re($agent_cert_on_disk_issuer, "^/CN=")
+  cve20113872_validate_re($agent_cert_on_disk_issuer, '^/CN=')
   # pe-puppet or puppet
   cve20113872_validate_re($agent_user, "puppet")
   # pe-puppet or puppet
@@ -42,11 +42,11 @@ class cve20113872::step4 {
   # /etc/puppetlabs/puppet/ssl/certs
   cve20113872_validate_re($agent_certdir, '^/')
   # /etc/puppetlabs/puppet/ssl/certs/ca.pem
-  cve20113872_validate_re($agent_localcacert, "^/.*?\.pem$")
+  cve20113872_validate_re($agent_localcacert, '^/.*?\.pem$')
   # /etc/puppetlabs/puppet/ssl/crl.pem
-  cve20113872_validate_re($agent_hostcrl, "^/.*?\.pem$")
+  cve20113872_validate_re($agent_hostcrl, '^/.*?\.pem$')
   # /var/run/pe-puppet/agent.pid
-  cve20113872_validate_re($agent_pidfile, "^/.*?\.pid$")
+  cve20113872_validate_re($agent_pidfile, '^/.*?\.pid$')
   # Certname can be anything, but it can't be empty.
   cve20113872_validate_re($agent_certname, ".")
   # Agents PID to reload it mid-run
