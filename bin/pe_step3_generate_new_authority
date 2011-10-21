@@ -28,16 +28,16 @@ idx=0
 # variable isn't already set.
 : ${DNS_NAME:=$(cat "${vardir}/${module}/dns_name")}
 if [[ -z "${DNS_NAME}" ]]; then
-  echo "Error: Could not determine the intermediate dns name from step1." >&2
-  echo "Did you run step1 first?" >&2
+  echo "Error: Could not determine the intermediate DNS name from step 1." >&2
+  echo "Did you run step 1 first?" >&2
   exit 1
 fi
 : ${DNS_ALT_NAMES:=$(cat "${vardir}/${module}/alt_names")}
 if [[ -z "${DNS_ALT_NAMES}" ]]; then
-  echo "Error: Could not determine the certdnsnames from step1." >&2
-  echo "Did you run step1 first?" >&2
+  echo "Error: Could not determine the certdnsnames from step 1." >&2
+  echo "Did you run step 1 first?" >&2
   echo "If you do not want any alternate names in your new master certificate" >&2
-  echo "simply touch ${vardir}/${module}/alt_names (Create an empty file)" >&2
+  echo "simply touch ${vardir}/${module}/alt_names to create an empty file." >&2
   exit 1
 fi
 
