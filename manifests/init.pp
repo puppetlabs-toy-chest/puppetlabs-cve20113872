@@ -1,5 +1,8 @@
 # Class: cve20113872
 #
+# This class contains resources and variables common to the agent remediation
+# classes in this module. It should not be declared manually.
+#
 class cve20113872 {
   $module = "cve20113872"
 
