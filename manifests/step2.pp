@@ -26,10 +26,10 @@
 class cve20113872::step2 {
   $module = "cve20113872"
 
-  # pe-puppet or puppet
-  cve20113872_validate_re($agent_user, "puppet")
-  # pe-puppet or puppet
-  cve20113872_validate_re($agent_group, "puppet")
+  # pe-puppet or puppet, but only check for a leading word character
+  cve20113872_validate_re($agent_user, '^\w')
+  # pe-puppet or puppet, but only check for a leading word character
+  cve20113872_validate_re($agent_group, '^\w')
   # Agents vardir.  We'll put scripts in here.
   cve20113872_validate_re($agent_vardir, '^/')
   # Agent config file
