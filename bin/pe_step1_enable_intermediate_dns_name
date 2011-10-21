@@ -7,7 +7,7 @@ export PATH="/opt/puppet/bin:$PATH"
 
 # The intermediate certificate name is a required argument
 if [[ -z "${1:-}" ]]; then
-  echo "You must specify the intermediate master certname as argument 1" >&2
+  echo "You must specify an intermediate certname for the puppet master as argument 1. Your site's DNS should be configured to resolve this new name to the puppet master." >&2
   echo "e.g. $(basename ${0}) puppetmaster.new" >&2
   exit 1
 else
@@ -58,7 +58,7 @@ backup="/etc/puppetlabs/cve20113872.orig.tar.gz"
 # Before modifying anything, make a backup
 if [[ -f "${backup}" ]]; then
   echo "A backup already exists!  You should restore from this backup" >&2
-  echo "using the pe_restore_original_state helper script and then remove" >&2
+  echo "using the pe_restore_original_state helper script, then remove" >&2
   echo "the backup at ${backup} before running this script again." >&2
   exit 1
 else
@@ -87,7 +87,7 @@ echo "done." >&2
 # There are a bunch of edge cases where the agent on the master may or may not be using the same certificate as
 # the master server itself.  To avoid these issues, I want to keep the master cert "as is" and just add a SAN to it.
 # This strategy also avoids having to reconfigure apache and puppet.conf.  They can remain as is.
-echo -n "Re-issuing a new SSL certificate for ${old_master_cert} with intermediate dns name ${new_master_cert} ..." >&2
+echo -n "Re-issuing a new SSL certificate for ${old_master_cert} with intermediate DNS name ${new_master_cert} ..." >&2
 puppet cert --clean "${old_master_cert}" 2>&1 >/dev/null
 puppet cert --generate --certdnsnames "${new_master_cert}:${certdnsnames}" "${old_master_cert}" 2>&1 >/dev/null
 echo "done." >&2
@@ -106,16 +106,19 @@ puppet agent --test 2>/dev/null >/dev/null || true
 echo "done." >&2
 
 cat <<EOMESSAGE
-Your master has been reconfigured with a intermediate dns name
+Your master has been reconfigured with an intermediate DNS alt name
 (${new_master_cert}) to mitigate CVE-2011-3872 Your agents will not be secured
-until they're configured to use this new name.
+until they are configured to contact the master at this new name.
 
-If your name service is configured already, your agents should work with the
-following command:
+If your site's DNS has been configured to resolve this name, your agents will be
+able to run with the following manual command:
 
     puppet agent --test --server ${new_master_cert}
 
-Please continue to step2 for assistance automatically reconfiguring all of your
-Puppet agents to use the secure intermediate DNS name.
+You may wish to test at least one agent this way to ensure that the next step
+will work.
+
+Please continue to step 2 to automatically reconfigure all of your puppet
+agent nodes to use the secure intermediate DNS name.
 
 EOMESSAGE

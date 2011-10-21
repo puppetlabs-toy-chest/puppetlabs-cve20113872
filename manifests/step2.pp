@@ -1,14 +1,18 @@
 # Class: cve20113872::step2
 #
 #   This class reconfigures the Puppet Agent to use an intermediate DNS name to
-#   contact the Puppet Master.  This name will not be contained in the
+#   contact the Puppet Master.  This name will not be one of the
 #   alternate names erroneously issued to all agents as described in
 #   CVE-2011-3872.
 #
-#   Once an agent successfully applies this class it will not be vulnerable to
-#   a man in the middle attack.
+#   Once an agent successfully applies this class, it will not be vulnerable to
+#   a man in the middle impersonation of the puppet master.
 #
 # Parameters:
+#
+#  There are no class parameters, but the facts distributed with this module
+#  are required.  Please make sure pluginsync is turned on to distribute them
+#  to the agents.
 #
 # Actions:
 #

@@ -14,8 +14,8 @@ vardir="$(puppet master --configprint vardir)"
 : ${DNS_NAME:=$(cat "${vardir}/${module}/dns_name")}
 
 if [[ -z "${DNS_NAME}" ]]; then
-  echo "Error: Could not determine the intermediate dns name from step1." >&2
-  echo "Did you run step1 first?" >&2
+  echo "Error: Could not determine the intermediate DNS name from step 1." >&2
+  echo "Did you run step 1 first?" >&2
   exit 1
 fi
 
@@ -31,7 +31,7 @@ idx=0
 
 # Replace the old master name with the new master name.  This reconfigures the
 # agent on the puppet master to use the intermediate DNS name.
-echo -n "Reconfiguring puppet.conf to connect to the master using intermediate dns name ${new_master_cert} ..." >&2
+echo -n "Reconfiguring puppet.conf to connect to the master using intermediate DNS name ${new_master_cert} ..." >&2
 # Use genconfig to figure out if server is set in puppet.conf
 if puppet agent --genconfig | grep -q '# server ='; then
   # server is not in puppet.conf.  If they have a [main], then use that, otherwise add [main]
@@ -57,7 +57,7 @@ fi
 echo "done." >&2
 
 # PE configures the fileserver using the old name by default in site.pp  We need to fix this
-echo -n "Reconfiguring site.pp to connect to the master using intermediate dns name ${new_master_cert} ..." >&2
+echo -n "Reconfiguring site.pp to connect to the master using intermediate DNS name ${new_master_cert} ..." >&2
 ruby -p -l -i.backup.${timestamp}.${idx} -e \
   'gsub(/\b(server\s*=>\s*.*?)('"${old_master_cert}"')(\W*)/) { "#{$1}'"${new_master_cert}"'#{$3}" }' \
   "${manifest}"
@@ -75,7 +75,7 @@ else
   cp -p "${manifest}" "${manifest}.backup.${timestamp}.${idx}"
   ((idx++))
   echo "" >> "${manifest}"
-  echo "# CVE-2011-3872 intermediate dns name reconfiguration class" >> "${manifest}"
+  echo "# CVE-2011-3872 remediation toolkit: intermediate DNS name reconfiguration class" >> "${manifest}"
   echo "include '${class}'" >> "${manifest}"
   echo "done." >&2
 fi
@@ -85,9 +85,11 @@ cat <<EOMESSAGE
 The Puppet Master has been reconfigured to include class ${class} in all node
 catalogs.  This class will reconfigure each agent to use the new, secure,
 intermediate DNS name.  Once an agent receives this catalog and successfully
-applies it, the node will be secured.
+applies it, it will be secured against impersonations of the puppet master.
 
-The remaining steps in the migration assistant will help you re-issue
-certificates from a new Certificate Authority if you choose to do so.
+**The remaining steps in the remediation toolkit are optional.**  If you
+choose to run them, they will help you secure your puppet master's previous
+DNS names for reuse by reissuing all certificates from a new Certificate
+Authority.
 
 EOMESSAGE
