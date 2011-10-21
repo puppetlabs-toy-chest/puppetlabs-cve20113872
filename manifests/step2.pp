@@ -28,6 +28,8 @@ class cve20113872::step2 {
   cve20113872_validate_re($agent_group, "puppet")
   # Agents vardir.  We'll put scripts in here.
   cve20113872_validate_re($agent_vardir, '^/')
+  # Agent config file
+  cve20113872_validate_re($agent_config, '^/')
 
   # Common class is the "main" class
   include "${module}"
@@ -46,12 +48,26 @@ class cve20113872::step2 {
   if $dns_name == "" {
     fail("Error: could not read DNS name from file: ${dns_name_file} (This should have been set in step1)")
   }
+  # Make a backup of the original puppet.conf to restore in step4
+  file { "${agent_config}.backup.${module}":
+    replace => false,
+    source  => "${agent_config}",
+    before  => Exec["CVE-2011-3872 Use Intermediate DNS Name"],
+  }
   exec { "CVE-2011-3872 Use Intermediate DNS Name":
     command => "${agent_vardir}/${module}/bin/reconfigure_server.rb '${agent_config}' '${dns_name}'",
+    onlyif  => "sh -c '[ -f ${agent_vardir}/${module}/step2_complete ] && exit 1 || exit 0'",
     unless  => "sh -c \"puppet agent --configprint server | grep '^${dns_name}\$'\"",
     require => File["${agent_vardir}/${module}/bin/reconfigure_server.rb"],
     notify  => Exec["CVE-2011-3872 Step2 Reload"],
   }
+  file { "CVE_2011-3872 Step2 Semaphore":
+    path    => "${agent_vardir}/${module}/step2_complete",
+    ensure  => file,
+    require => Exec["CVE-2011-3872 Use Intermediate DNS Name"],
+    before  => Exec["CVE-2011-3872 Step2 Reload"],
+  }
+
   exec { "CVE-2011-3872 Step2 Reload":
     command     => "kill -HUP ${agent_pid}",
     refreshonly => true,

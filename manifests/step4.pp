@@ -110,6 +110,13 @@ class cve20113872::step4 {
         path    => "${agent_hostcrl}",
         content => file("${master_ssldir}/ca/ca_crl.pem"),
       }
+      # Restore the backup of the puppet.conf file if it was created in step2
+      exec { "CVE-2011-3872 Restore puppet.conf":
+        onlyif  => "sh -c \"test -f '${agent_config}.backup.${module}'\"",
+        command => "sh -c \"cp -p '${agent_config}.backup.${module}' '${agent_config}'\"",
+        notify  => Exec["CVE-2011-3872 Reload"],
+        require => File["${agent_config}.backup.${module}"],
+      }
       # Reload the agent.  This is OK to not be idemopotent because we should only
       # add these resources to the catalog if the agent has a certificate issued
       # by an authority the master is not currently using.
