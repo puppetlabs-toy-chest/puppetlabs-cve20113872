@@ -1,0 +1,114 @@
+#! /bin/bash
+#
+set -e
+set -u
+
+# The intermediate certificate name is a required argument
+if [[ -z "${1:-}" ]]; then
+  echo "You must specify an intermediate certname for the puppet master as argument 1. Your site's DNS should be configured to resolve this new name to the puppet master." >&2
+  echo "e.g. $(basename ${0}) puppetmaster.new" >&2
+  exit 1
+else
+  new_master_cert="${1}"
+  shift
+fi
+
+# Check if the master is running.
+if [[ -f $(puppet master --configprint pidfile) ]]; then
+  echo "You must stop your Webrick puppet master before running this script" >&2
+  exit 1
+fi
+
+vardir="$(puppet master --configprint vardir)"
+certdnsnames="$(puppet master --configprint certdnsnames)"
+
+# Write the new DNS name to ${vardir}/cve20113872/dns_name
+if [[ ! -d "${vardir}/cve20113872" ]]; then
+  mkdir -p "${vardir}/cve20113872"
+  # Avoid umask issues
+  chmod 755 "${vardir}/cve20113872"
+fi
+echo "${new_master_cert}" > "${vardir}/cve20113872/dns_name"
+chmod 644 "${vardir}/cve20113872/dns_name"
+echo "${new_master_cert}:${certdnsnames}" > "${vardir}/cve20113872/alt_names"
+chmod 644 "${vardir}/cve20113872/alt_names"
+
+timestamp="$(ruby -e 'puts Time.now.to_i')"
+
+# As LAK points out, configuring Puppet to communicate with a master
+# using a name that is not in CN or CERTDNSNAMES will secure the
+# entire system again.
+# We need a new certificate to do this...
+old_master_cert="$(puppet master --configprint certname)"
+
+confdir="$(puppet master --configprint confdir)"
+ssldir="$(puppet master --configprint ssldir)"
+manifest="$(puppet master --configprint manifest)"
+puppetconf="$(puppet master --configprint config)"
+autosign="${confdir}/autosign.conf"
+hostcrl="$(puppet master --configprint hostcrl)"
+
+# The new CA CN _must_ be different than the old CA CN
+old_ca_cn="$(puppet master --configprint ca_name)"
+
+backup="$(puppet master --configprint confdir)/cve20113872.orig.tar.gz"
+
+# Before modifying anything, make a backup
+if [[ -f "${backup}" ]]; then
+  echo "A backup already exists!  You should restore from this backup" >&2
+  echo "using the pe_restore_original_state helper script, then remove" >&2
+  echo "the backup at ${backup} before running this script again." >&2
+  exit 1
+else
+  backup_list=$(mktemp -t cve20113872.backup.lst.XXXXXXXXXX)
+  echo "${ssldir}"      >> "${backup_list}"
+  echo "${manifest}"    >> "${backup_list}"
+  echo "${puppetconf}"  >> "${backup_list}"
+  # Note this assumes GNU tar...
+  tar --files-from "${backup_list}" -czf "${backup}" 2>/dev/null >/dev/null
+  echo "Backup written to: ${backup}" >&2
+fi
+
+# Make sure certdnsnames are off.  This will prevent the master from issuing
+# additional agent certificates that may be used to impersonate the master.
+idx=0
+echo -n "Making sure certdnsnames are turned off (${puppetconf}) ..." >&2
+ruby -p -l -i.backup.${timestamp}.${idx} -e \
+  'gsub(/^(\s*)(certdnsnames\b.*$)/) { "#{$1}# Disabled to mitigate CVE-2011-3872\n#{$1}# #{$2}" }' \
+  "${puppetconf}"
+((idx++))
+echo "done." >&2
+
+echo -n "Backing up cleaned puppet.conf for later restore ..." >&2
+cp "${puppetconf}" "${puppetconf}.cvebackup"
+echo "done." >&2
+
+
+# Generate the new SSL certificate using the old CA
+# Note, we actually replace the existing SSL certificate and effectively add another Subject Alt Name to the list.
+# There are a bunch of edge cases where the agent on the master may or may not be using the same certificate as
+# the master server itself.  To avoid these issues, I want to keep the master cert "as is" and just add a SAN to it.
+# This strategy also avoids having to reconfigure apache and puppet.conf.  They can remain as is.
+echo -n "Re-issuing a new SSL certificate for ${old_master_cert} with intermediate DNS name ${new_master_cert} ..." >&2
+puppet cert --clean "${old_master_cert}" 2>&1 >/dev/null
+puppet cert --generate --certdnsnames "${new_master_cert}:${certdnsnames}" "${old_master_cert}" 2>&1 >/dev/null
+echo "done." >&2
+
+
+cat <<EOMESSAGE
+Your master has been reconfigured with an intermediate DNS alt name
+(${new_master_cert}) to mitigate CVE-2011-3872 Your agents will not be secured
+until they are configured to contact the master at this new name.
+
+If your site's DNS has been configured to resolve this name, your agents will be
+able to run with the following manual command:
+
+    puppet agent --test --server ${new_master_cert}
+
+You may wish to test at least one agent this way to ensure that the next step
+will work.
+
+Please continue to step 2 to automatically reconfigure all of your puppet
+agent nodes to use the secure intermediate DNS name.
+
+EOMESSAGE

@@ -1,0 +1,90 @@
+#! /bin/bash
+#
+
+set -e
+set -u
+
+# Check if the master is running.
+if [[ -f $(puppet master --configprint pidfile) ]]; then
+  echo "You must stop your Webrick puppet master before running this script" >&2
+  exit 1
+fi
+
+# Steps
+# * Remove the existing files related to $certname.  If we don't clean up
+#   first, we'll get the old certificate which does not match the private key and
+#   is therefore useless.
+# * Issue a new certificate for $certname using the new CA.  Agents were
+#   configured to trust only the new CA in step 4.  This new certificate allows
+#   the agents to obtain a catalog again.
+# * Replace the trusted CA bundle (both CA certs) with a file containing only the
+#   new CA cert.  This means only agents who possess a cert issued by the new ca will
+#   be authenticated.
+# * Start the Master
+
+timestamp="$(ruby -e 'puts Time.now.to_i')"
+
+module="cve20113872"
+puppetconf="$(puppet master --configprint config)"
+vardir="$(puppet master --configprint vardir)"
+ssldir="$(puppet master --configprint ssldir)"
+certname="$(puppet master --configprint certname)"
+manifest="$(puppet master --configprint manifest)"
+
+# This is some shell magic to read a file into a variable if the
+# variable isn't already set.
+: ${DNS_NAME:=$(cat "${vardir}/${module}/dns_name")}
+if [[ -z "${DNS_NAME}" ]]; then
+  echo "Error: Could not determine the intermediate dns name from step 1." >&2
+  echo "Did you run step 1 first?" >&2
+  exit 1
+fi
+: ${DNS_ALT_NAMES:=$(cat "${vardir}/${module}/alt_names")}
+if [[ -z "${DNS_ALT_NAMES}" ]]; then
+  echo "Error: Could not determine the certdnsnames from step 1." >&2
+  echo "Did you run step 1 first?" >&2
+  echo "If you do not want any alternate names in your new master certificate" >&2
+  echo "simply touch ${vardir}/${module}/alt_names (Create an empty file)" >&2
+  exit 1
+fi
+
+# This is disabled at this point in puppet.conf, so we have to read it from what
+# we wrote out in step1
+certdnsnames="${DNS_ALT_NAMES}"
+intermediate_name="${DNS_NAME}"
+
+echo -n "Issuing new certificate for ${certname} ..." >&2
+for d in certs private_keys public_keys ca/signed; do
+  mv "${ssldir}/${d}/${certname}.pem" "${ssldir}/${d}/${certname}.pem.previous"
+done
+# Now issue the new certificate
+puppet cert --generate --certdnsnames "${certdnsnames}" "${certname}" >/dev/null
+echo "done." >&2
+
+# Replace the certificate bundles which authenticate the previous ca with a
+# "bundle" of one certificate containing only the new ca.  This will mean the
+# master will no longer authenticate agents who possess certificates issued by
+# the previous ca.
+cp -p "${ssldir}/ca/ca_crt.pem" "${ssldir}/certs/ca.pem"
+cp -p "${ssldir}/ca/ca_crl.pem" "${ssldir}/crl.pem"
+
+## Restore site.pp to the original state when we started this process ##
+cp -p "${manifest}.original" "${manifest}"
+rm "${manifest}.original"
+
+## Restore backed up clean puppet.conf
+cp -p "${puppetconf}.cvebackup" "${puppetconf}"
+
+cat <<EOMESSAGE
+
+The puppet master has been issued an SSL certificate by the new CA.  The
+migration to the new CA is now complete.  Puppet agents which have been
+migrated should now be able to reconnect to this master.
+
+The manifest ${manifest} has been restored to its
+original state.  The cve20113872::step2 and cve20113872::step4 classes will no
+longer be included in node catalogs.
+
+You will need to start your webrick puppet master manually now.
+
+EOMESSAGE

@@ -1,0 +1,47 @@
+#! /bin/bash
+#
+# This step triggers the agents to re-generate their CSR to be signed
+# by the CA generated in Step 3
+#
+
+module="cve20113872"
+class="${module}::step4"
+
+manifest="$(puppet master --configprint manifest)"
+
+timestamp="$(ruby -e 'puts Time.now.to_i')"
+idx=0
+
+# Add the cve20113872::step4 class to the catalog of every node.  This catalog
+# will cause the agent to move its ssldir out of the way and submit a new CSR
+# to the master.  Depending on the implementation of the class, the agent may
+# not trust the master until the master is also using a SSL certificate issued
+# by the new CA generated in step3.
+if grep -q "include '${class}'" "${manifest}"; then
+  echo "site.pp already includes class '${class}' ... (Nothing to do)" >&2
+else
+  echo -n "Adding ${class} to all catalogs using site.pp ..." >&2
+  # Make a backup of site.pp before we write to it.
+  cp -p "${manifest}" "${manifest}.backup.${timestamp}.${idx}"
+  ((idx++))
+  echo "" >> "${manifest}"
+  echo "# CVE-2011-3872 remediation toolkit: CA and certificate replacement class" >> "${manifest}"
+  echo "include '${class}'" >> "${manifest}"
+  echo "done." >&2
+fi
+
+cat <<EOMESSAGE
+
+The Puppet Master has been reconfigured to include class ${class} in all
+catalogs. This class will configure each agent system to no longer trust the
+previous CA and to submit a new certificate signing request to the master.
+
+Agents who have already run this catalog will pause their normal operation
+until the end of step 5, as the master will continue using a certificate from
+the previous CA until all of the remaining agents have run.
+
+Once all agents have new certificates, step 5 should be run to switch the
+master to an SSL certificate issued by the new CA.  Any agent that has run a
+step 4 catalog will not obtain new configurations until step 5 is complete.
+
+EOMESSAGE
