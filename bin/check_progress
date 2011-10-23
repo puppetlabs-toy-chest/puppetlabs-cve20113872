@@ -40,6 +40,7 @@ module CVE20113872
     def load_active_nodes
       now = Time.now
       dir = Pathname.new(File.join(yamldir, "node"))
+      return unless File.directory?(dir)
       Dir.chdir(dir.to_s)
       # Select files modified within the last 30 days
       files = dir.entries.select do |f|
@@ -58,6 +59,7 @@ module CVE20113872
     # the active nodes
     def load_node_progress
       dir = Pathname.new(File.join(yamldir, "cve20113872"))
+      return unless File.directory?(dir)
       Dir.chdir(dir.to_s)
       # Select files modified within the last 30 days
       files = dir.entries.select do |f|
