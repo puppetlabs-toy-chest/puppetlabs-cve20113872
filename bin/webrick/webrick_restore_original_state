@@ -1,0 +1,28 @@
+#! /bin/bash
+#
+set -e
+set -u
+
+timestamp="$(ruby -e 'puts Time.now.to_i')"
+
+backup="$(puppet master --configprint confdir)/cve20113872.orig.tar.gz"
+
+if [[ ! -f "${backup}" ]]; then
+  echo "Error: There is no backup at ${backup}." >&2
+  echo "This backup is created when running the step1 script for PE." >&2
+  exit 1
+fi
+
+# Check if the master is running.
+if [[ -f $(puppet master --configprint pidfile) ]]; then
+  echo "You must stop your Webrick puppet master before running this script" >&2
+  exit 1
+fi
+
+echo "Restoring the Puppet Master to its original state" >&2
+echo "The files modified by step1 will be replaced by their backup copies" >&2
+echo "" >&2
+
+tar -xvz -C / -f "${backup}"
+
+echo "You can now start your webrick puppet master." >&2
