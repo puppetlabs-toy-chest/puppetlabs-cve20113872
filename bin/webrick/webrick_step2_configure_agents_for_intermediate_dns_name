@@ -1,0 +1,106 @@
+#! /bin/bash
+#
+set -e
+set -u
+
+module="cve20113872"
+class="${module}::step2"
+
+# Check if the master is running.
+if [[ -f $(puppet master --configprint pidfile) ]]; then
+  echo "You must stop your Webrick puppet master before running this script" >&2
+  exit 1
+fi
+
+vardir="$(puppet master --configprint vardir)"
+
+# This is some shell magic to read a file into a variable if the
+# variable isn't already set.
+: ${DNS_NAME:=$(cat "${vardir}/${module}/dns_name")}
+
+if [[ -z "${DNS_NAME}" ]]; then
+  echo "Error: Could not determine the intermediate DNS name from step 1." >&2
+  echo "Did you run step 1 first?" >&2
+  exit 1
+fi
+
+new_master_cert="${DNS_NAME}"
+
+timestamp="$(ruby -e 'puts Time.now.to_i')"
+
+puppetconf="$(puppet master --configprint config)"
+manifest="$(puppet master --configprint manifest)"
+old_master_cert="$(puppet master --configprint certname)"
+
+idx=0
+
+# Replace the old master name with the new master name.  This reconfigures the
+# agent on the puppet master to use the intermediate DNS name.
+echo -n "Reconfiguring puppet.conf to connect to the master using intermediate DNS name ${new_master_cert} ..." >&2
+# Use genconfig to figure out if server is set in puppet.conf
+if puppet agent --genconfig | grep -q '# server ='; then
+  # server is not in puppet.conf.  If they have a [main], then use that, otherwise add [main]
+  if grep -q '^\[main\]' "${puppetconf}"; then
+    ruby -p -l -i.backup.${timestamp}.${idx} -e \
+      'gsub(/^\[main\].*/) { "[main]\n    server = '"${new_master_cert}"'" }' \
+      "${puppetconf}"
+    ((idx++))
+  else
+    cp -p "${puppetconf}" "${puppetconf}.backup.${timestamp}.${idx}"
+    ((idx++))
+    echo '[main]' >> "${puppetconf}"
+    echo "    server = ${new_master_cert}" >> "${puppetconf}"
+  fi
+else
+  # server is in puppet.conf.  Replace _all_ instances of the server setting in
+  # puppet.conf
+  ruby -p -l -i.backup.${timestamp}.${idx} -e \
+    'gsub(/^(\s*)(server.*?=)(\s*)('"${old_master_cert}"')\s*$/) { "#{$1}server = '"${new_master_cert}"'" }' \
+    "${puppetconf}"
+  ((idx++))
+fi
+echo "done." >&2
+
+# Save a backup copy of site.pp to restore in step 5
+cp -p "${manifest}" "${manifest}.original"
+
+# PE configures the fileserver using the old name by default in site.pp  We need to fix this
+echo -n "Reconfiguring site.pp to connect to the master using intermediate DNS name ${new_master_cert} ..." >&2
+ruby -p -l -i.backup.${timestamp}.${idx} -e \
+  'gsub(/\b(server\s*=>\s*.*?)('"${old_master_cert}"')(\W*)/) { "#{$1}'"${new_master_cert}"'#{$3}" }' \
+  "${manifest}"
+((idx++))
+echo "done." >&2
+
+# Add the cve20113872 class to every nodes catalog.  This class will actually flip the node
+# to the new DNS name and not do anything with the client certificate.
+# FIXME: The class needs to be updated to only flip the server setting in puppet.conf
+if grep -q "include '${class}'" "${manifest}"; then
+  echo "site.pp already includes class '${class}' ... (Nothing to do)" >&2
+else
+  echo -n "Adding ${class} to all catalogs using site.pp ..." >&2
+  # Make a backup of site.pp before we write to it.
+  cp -p "${manifest}" "${manifest}.backup.${timestamp}.${idx}"
+  ((idx++))
+  echo "" >> "${manifest}"
+  echo "# CVE-2011-3872 remediation toolkit: intermediate DNS name reconfiguration class" >> "${manifest}"
+  echo "include '${class}'" >> "${manifest}"
+  echo "done." >&2
+fi
+
+cat <<EOMESSAGE
+
+The Puppet Master has been reconfigured to include class ${class} in all node
+catalogs.  This class will reconfigure each agent to use the new, secure,
+intermediate DNS name.  Once an agent receives this catalog and successfully
+applies it, it will be secured against impersonations of the puppet master.
+
+**The remaining steps in the remediation toolkit are optional.**  If you
+choose to run them, they will help you secure your puppet master's previous
+DNS names for reuse by reissuing all certificates from a new Certificate
+Authority.
+
+You can either choose to start your webrick puppet master now and reissue
+certificates later, or you can proceed onto the next step.
+
+EOMESSAGE
