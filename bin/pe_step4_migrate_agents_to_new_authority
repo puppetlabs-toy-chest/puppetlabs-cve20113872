@@ -3,8 +3,10 @@
 # This step triggers the agents to re-generate their CSR to be signed
 # by the CA generated in Step 3
 #
+set -e
+set -u
 
-export PATH="/opt/puppet/bin:$PATH"
+export PATH="${CVE_PATH:-'/opt/puppet/bin'}:$PATH"
 module="cve20113872"
 class="${module}::step4"
 
