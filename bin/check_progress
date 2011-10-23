@@ -14,11 +14,16 @@ module CVE20113872
     # The folder node progress files are located in
     # Usually $yamldir/cve20113872/progress_${agent_certname}.yaml
     attr_accessor :yamldir
+    attr_accessor :cadir
     attr_accessor :nodes
 
     def clear_nodes
       @nodes = Hash.new do |h,k|
-        h[k] = { 'step' => 0, 'message' => 'No Progress' }
+        h[k] = {
+          'step'    => 0,
+          'message' => 'No Progress',
+          'bucket'  => 'Potentially Vulnerable',
+        }
       end
     end
 
@@ -29,6 +34,12 @@ module CVE20113872
         @yamldir = %x{#{puppet} master --configprint yamldir}.chomp
       else
         @yamldir = options[:yamldir]
+      end
+      if ! options[:cadir] then
+        raise RuntimeError, "#{puppet} must be executable if cadir is not provided" unless File.executable? @puppet
+        @cadir = %x{#{puppet} master --configprint cadir}.chomp
+      else
+        @cadir = options[:cadir]
       end
       clear_nodes
       self
@@ -67,9 +78,33 @@ module CVE20113872
       end
       files.each do |file|
         hsh = YAML.load_file(file)
-        @nodes.merge!(hsh)
+        @nodes.merge!(hsh) do |certname, old_hsh, new_hsh|
+          filter_nodes_into_buckets(old_hsh.merge(new_hsh))
+        end
       end
       @nodes
+    end
+
+    # Given a node status hash, check if it has a cert
+    # or csr.  If it does, record the progress, if not
+    # set the progress back to step 2.
+    def filter_nodes_into_buckets(node_hsh = {})
+      if node_hsh['step'] == 2; then
+        node_hsh['bucket'] = 'Risk Mitigated (Using new DNS name)'
+      end
+      return node_hsh unless node_hsh['step'] > 2
+      if File.exists?(File.join(@cadir, "signed", "#{node_hsh['agent_certname']}.pem"))
+        node_hsh['message'] = 'OK: Agent certificate already signed'
+        node_hsh['bucket'] = 'Risk Mitigated (Issued a new Cert)'
+      elsif File.exists?(File.join(@cadir, "requests", "#{node_hsh['agent_certname']}.pem"))
+        node_hsh['message'] = 'OK: Agent submitted a pending CSR'
+        node_hsh['bucket'] = 'Risk Mitigated (Pending CSR)'
+      else
+        node_hsh['step'] = 2
+        node_hsh['message'] = 'OK: Agent received step 4 catalog but has yet to submit a new CSR'
+        node_hsh['bucket'] = 'Risk Mitigated (Using new DNS name)'
+      end
+      node_hsh
     end
 
     def display(options = {})
@@ -90,12 +125,21 @@ module CVE20113872
         # We want counts for these steps at the minimum
         puts "Status as of: #{Time.now.strftime(time_format)}"
         puts
-        puts "    Total Nodes:         %6d *" % step_totals['total']
-        puts "    Step0 (Has not run): %6d (%3.1d%%)" % [ step_totals[0], step_totals[0] * 100 / step_totals['total'] ]
-        puts "    Step2 (DNS Switch):  %6d (%3.1d%%)" % [ step_totals[2], step_totals[2] * 100 / step_totals['total'] ]
-        puts "    Step4 (SSL Switch):  %6d (%3.1d%%)" % [ step_totals[4], step_totals[4] * 100 / step_totals['total'] ]
+        puts "    %40s %6d *" % [ "Total Nodes:", step_totals['total'] ]
+        puts "    %40s %6d (%3.1f%%)" % [ "Step 0 (Has not run):", step_totals[0], step_totals[0] * 100 / step_totals['total'] ]
+        puts "    %40s %6d (%3.1f%%)" % [ "Step 2 (DNS Switch):", step_totals[2], step_totals[2] * 100 / step_totals['total'] ]
+        puts "    %40s %6d (%3.1f%%)" % [ "Step 4 (SSL Switch):",  step_totals[4], step_totals[4] * 100 / step_totals['total'] ]
         puts
         puts " * Total of the nodes active within the last 30 days"
+        puts
+        # Now we want our bucket totals.  These give more concrete status of risk mitigation.
+        bucket_totals = nodes.reduce(Hash.new() { |h,k| h[k] = 0 }) do |hsh, (node, node_hsh)|
+          hsh[node_hsh['bucket']] += 1
+          hsh
+        end
+        bucket_totals.keys.sort.each do |bucket|
+          puts "    %40s %6d (%3.1f%%)" % [ "#{bucket}:", bucket_totals[bucket], bucket_totals[bucket] * 100 / step_totals['total'] ]
+        end
         puts
       end
     end
