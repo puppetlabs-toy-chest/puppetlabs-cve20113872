@@ -3,7 +3,7 @@
 set -e
 set -u
 
-export PATH="/opt/puppet/bin:$PATH"
+export PATH="${CVE_PATH:-'/opt/puppet/bin'}:$PATH"
 
 # The intermediate certificate name is a required argument
 if [[ -z "${1:-}" ]]; then
