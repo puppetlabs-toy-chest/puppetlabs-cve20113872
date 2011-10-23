@@ -48,7 +48,7 @@ class cve20113872::step4 {
   # /var/run/pe-puppet/agent.pid
   cve20113872_validate_re($agent_pidfile, '^/.*?\.pid$')
   # Certname can be anything, but it can't be empty.
-  cve20113872_validate_re($agent_certname, ".")
+  cve20113872_validate_re($agent_certname, '.')
   # Agents PID to reload it mid-run
   cve20113872_validate_re($agent_pid, '^\d+$')
   # Agents vardir.  We'll put scripts in here.
@@ -84,6 +84,7 @@ class cve20113872::step4 {
           notify { "CVE-2011-3872 Already Migrated":
             message => "This node has already been issued a certificate by CA ${master_ca_cn}.  No migration is necessary.",
           }
+          cve20113872_store_progress($agent_certname, "4", "OK: Has cert issued by ${master_ca_cn}")
         }
         default: {
           notify { "CVE-2011-3872 Migration":
@@ -130,11 +131,14 @@ class cve20113872::step4 {
           exec { "CVE-2011-3872 Reload":
             command => "kill -HUP ${agent_pid}",
           }
+          # Write state file
+          cve20113872_store_progress($agent_certname, "4", "OK: Has been configured to submit a new CSR")
         }
       }
     }
     default: {
       notice("Not applying resources in ${module}::step4 to the migration host.")
+      cve20113872_store_progress($agent_certname, "4", "OK: Nothing to do on the migration host")
     }
   }
 }
