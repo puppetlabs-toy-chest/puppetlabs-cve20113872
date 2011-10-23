@@ -140,6 +140,13 @@ module CVE20113872
         bucket_totals.keys.sort.each do |bucket|
           puts "    %40s %6d (%3.1f%%)" % [ "#{bucket}:", bucket_totals[bucket], bucket_totals[bucket] * 100 / step_totals['total'] ]
         end
+        # Get a total of "Risk Mitigated" buckets
+        mitigated_count = bucket_totals.reduce(0) do |mitigated, (bucket, bucket_count)|
+          mitigated += bucket_count if bucket =~ /Risk Mitigated/
+          mitigated
+        end
+        puts "    --------------------------------------------------------"
+        puts "    %40s %6d (%3.1f%%)" % [ "Total of Nodes Remediated:", mitigated_count, mitigated_count * 100 / step_totals['total'] ]
         puts
       end
     end
