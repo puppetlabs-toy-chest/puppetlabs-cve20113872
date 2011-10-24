@@ -1,0 +1,5 @@
+2011-10-23 Puppet Labs <support@puppetlabs.com> - 0.0.1
+* Initial Release
+* Documentation, instructions, and helpful information about CVE-2011-3872
+* CVE-2011-3872 Scan utility
+* CVE-2011-3872 Remediation Process puppet modules
