@@ -41,7 +41,7 @@ protect yourself by breaking either condition:
 * If you configure all agent nodes to reach the master at a new, "clean" DNS
   name, they cannot be spoofed by rogue agent certs with the old DNS names.
 * If you migrate all machines to a new CA which has never had `certdnsnames`
-  turned on, every dangerous certificate will be invalidated.
+  turned on, every dangerous certificate will be permanently invalidated.
 
 This module can break both conditions of the vulnerability. 
 
@@ -60,7 +60,7 @@ You have three main options for remediating the AltNames vulnerability.
 
 1. If you have a **small-to-moderate number of nodes and can trivially SSH to
    all of them,** you can use a simpler remediation workflow. Disregard the rest
-   of this guide and consult README-ssh-only.markdown.
+   of this guide and consult [README-ssh-only.markdown][ssh].
 2. If mass SSH is impractical and you **don't mind permanently changing the
    puppet master's DNS name,** you can protect yourself by running only the
    first two steps of this module. Continue reading for instructions, and stop
@@ -70,6 +70,8 @@ You have three main options for remediating the AltNames vulnerability.
    of the old names) you should run steps 1 through 5 of the remediation module.
    Continue reading for instructions.
 
+[ssh]: https://github.com/puppetlabs/puppetlabs-cve20113872/blob/master/README-ssh-only.markdown
+
 Walkthrough
 -----------
 
@@ -78,7 +80,7 @@ To remediate your site with this module, you must:
 * Stop adding new nodes
 * Create a new temporary DNS entry for the puppet master
 * Install the module
-* Ensure that your modules will not interfere with the remediation
+* Ensure that your own modules will not interfere with the remediation
 * Run steps 1 and 2 to secure your site
 * Optionally, run steps 3 through 5 to "clean" the puppet master's previous DNS
   names
@@ -86,8 +88,8 @@ To remediate your site with this module, you must:
 ### Stop Adding New Nodes
 
 You should not add nodes to your Puppet infrastructure during the remediation
-of this vulnerability, as there is an increased chance of putting new nodes
-into an "orphaned" state.
+process, as it may strand new nodes in an "orphaned" state that requires manual
+repair.
 
 ### Create a New DNS Entry for the Puppet Master
 
@@ -162,7 +164,35 @@ From the top directory of this module, run the following:
 
 #### Other users
 
-TODO
+**Important note: Our initial set of non-PE scripts require that you run
+puppet master under WEBrick for the duration of the remediation process.**
+This is because most production-scale master configurations terminate SSL at
+the load balancer or web server, and we were unable to automatically adjust
+these certificate settings in a one-size-fits-all manner. If your site
+operates at an extreme scale, you may need to manually tailor the tasks in
+each step to your master configuration, but we are hoping that most users can
+absorb the temporary performance hit. If you are able to automate remediation
+under other puppet master configurations, please consider making a public fork
+of this module or submitting a pull request.
+
+* If you can maintain a secondary shell session to the puppet master server, you
+  can start a WEBrick master with `puppet master --no-daemonize --verbose` and
+  stop it with ctrl-C.
+* If you prefer to only maintain one shell session, you can start a WEBrick
+  master with `puppet master` and stop it with 
+  `kill $(cat $(puppet master --configprint pidfile))`. 
+
+Stop your normal puppet master. Be sure to both stop the puppet master
+processes and disable any supervisor process that manages the master. (For
+example, if you are running puppet master under Passenger, you should either
+stop Apache/Nginx, or restart the web server after moving the master's vhost
+config file to a disabled location.)
+
+From the top directory of this module, run the following:
+
+    bin/webrick/webrick_step1_enable_intermediate_dns_name
+
+Do not re-start the puppet master; proceed directly to step 2.
 
 #### Site status after running step 1:
 
@@ -189,9 +219,17 @@ From the top directory of this module, run the following:
 
     bin/pe_step2_configure_agents_for_intermediate_dns_name
 
+You must now wait for every agent node to check in.
+
 #### Other Users
 
-TODO
+From the top directory of this module, run the following:
+
+    bin/webrick/webrick_step2_configure_agents_for_intermediate_dns_name
+
+Start a WEBrick puppet master server as described in step 1. If you do NOT
+intend to run steps 3 through 5, re-start your original production-scale
+puppet master.
 
 #### Checking agent status
 
@@ -244,7 +282,12 @@ From the top directory of this module, run the following:
 
 #### Other Users
 
-TODO
+Stop the WEBrick puppet master you started in step 2. From the top directory
+of this module, run the following:
+
+    bin/webrick/webrick_step3_generate_new_authority
+
+Do not re-start the puppet master; proceed directly to step 4.
 
 #### Site status after running step 3:
 
@@ -276,7 +319,11 @@ From the top directory of this module, run the following:
 
 #### Other Users
 
-TODO
+From the top directory of this module, run the following:
+
+    bin/webrick/webrick_step4_migrate_agents_to_new_authority
+
+Start a WEBrick puppet master server as described in step 1.
 
 #### Checking agent status
 
@@ -307,13 +354,12 @@ retrieve and run their normal catalogs until the end of step 5.**
 
 **You should not run step 5 until all agents have run once.** If you run step
 5 too early, any agents who have not run their step 4 catalogs **will be in an
-"orphaned" state** and must be repaired manually. Use the included status tool
-<!-- TODO --> to check whether your entire population has been migrated to the
-new CA.
+"orphaned" state** and must be repaired manually. Use the `bin/check_progress`
+script to check how much of your population has been migrated to the new CA.
 
 Orphaned nodes can be repaired by logging in, moving the `ssldir` to a new
 location, and restarting puppet agent. Run `puppet agent --configprint ssldir`
-to locate the `ssldir`.
+to locate an agent node's `ssldir`.
 
 ### Step 5
 
@@ -333,7 +379,12 @@ From the top directory of this module, run the following:
 
 #### Other Users
 
-TODO
+Stop the WEBrick puppet master you started in step 4. From the top directory
+of this module, run the following:
+
+    bin/webrick/webrick_step5_migrate_the_master
+
+Re-start **your original production-scale puppet master server.**
 
 #### Site status after running step 5:
 
