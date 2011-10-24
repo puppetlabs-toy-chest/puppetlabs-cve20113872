@@ -3,7 +3,7 @@
 set -e
 set -u
 
-export PATH="${CVE_PATH:-'/opt/puppet/bin'}:$PATH"
+export PATH="/opt/puppet/bin:$PATH"
 
 # Steps
 # * Stop the master
