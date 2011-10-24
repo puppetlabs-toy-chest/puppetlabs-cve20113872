@@ -13,6 +13,18 @@ else
   shift
 fi
 
+# Check if the master has been upgraded to a patched Puppet Version
+# We don't support this yet.
+if puppet master --configprint dns_alt_names &>/dev/null; then
+  echo "PENDING: It appears puppet on this node has already been upgraded to a version which" >&2
+  echo "Closes the CVE-2011-3872 vulnerability.  Nodes may still be vulnerable and their certificates" >&2
+  echo "re-issued, however this program has not been patched to support the --dns_alt_names option" >&2
+  echo "introduced in fixed versions of Puppet." >&2
+  echo "" >&2
+  echo "Please see https://github.com/puppetlabs/puppetlabs-cve20113872/issues/71 for up to date information" >&2
+  exit 2
+fi
+
 # Check if the master is running.
 if [[ -f $(puppet master --configprint pidfile) ]]; then
   echo "You must stop your Webrick puppet master before running this script" >&2
