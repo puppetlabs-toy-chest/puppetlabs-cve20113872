@@ -301,7 +301,7 @@ Do not re-start the puppet master; proceed directly to step 4.
 
 This step:
 
-* Adds the `cve20113972::step2` class to all agent catalogs. This class:
+* Adds the `cve20113972::step4` class to all agent catalogs. This class:
     * Moves the agent's `ssldir` to a backup location.
     * Securely configures the agent to trust the new CA (and _only_ the new CA).
     * Configures the agent to contact the master at its old DNS name
