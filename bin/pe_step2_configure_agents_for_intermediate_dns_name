@@ -27,7 +27,10 @@ puppetconf="$(puppet master --configprint config)"
 manifest="$(puppet master --configprint manifest)"
 old_master_cert="$(puppet master --configprint certname)"
 
-idx=0
+# If this starts at 0, incrementing it will exit nonzero
+# See: https://gist.github.com/1310371
+# and https://github.com/puppetlabs/puppetlabs-cve20113872/issues/69
+idx=1
 
 # Replace the old master name with the new master name.  This reconfigures the
 # agent on the puppet master to use the intermediate DNS name.

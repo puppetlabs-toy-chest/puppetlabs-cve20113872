@@ -69,9 +69,13 @@ else
   echo "Backup written to: ${backup}" >&2
 fi
 
+# If this starts at 0, incrementing it will exit nonzero
+# See: https://gist.github.com/1310371
+# and https://github.com/puppetlabs/puppetlabs-cve20113872/issues/69
+idx=1
+
 # Make sure certdnsnames are off.  This will prevent the master from issuing
 # additional agent certificates that may be used to impersonate the master.
-idx=0
 echo -n "Making sure certdnsnames are turned off (${puppetconf}) ..." >&2
 ruby -p -l -i.backup.${timestamp}.${idx} -e \
   'gsub(/^(\s*)(certdnsnames\b.*$)/) { "#{$1}# Disabled to mitigate CVE-2011-3872\n#{$1}# #{$2}" }' \
