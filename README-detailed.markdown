@@ -64,7 +64,8 @@ You have three main options for remediating the AltNames vulnerability.
 2. If mass SSH is impractical and you **don't mind permanently changing the
    puppet master's DNS name,** you can protect yourself by running only the
    first two steps of this module. Continue reading for instructions, and stop
-   after step 2.
+   after step 2. You may need to modify your new node bootstrapping process to
+   use the new DNS name.
 3. If mass SSH is impractical and you **wish to continue using the current DNS
    name(s),** (or if you just want long-term protection against accidental reuse
    of the old names) you should run steps 1 through 5 of the remediation module.
@@ -257,8 +258,9 @@ After every agent node has checked in once:
 
 **Your site is now protected.** However, all of the master's previous DNS
 names are unsafe to use for the remaining lifetime of the CA. If you are
-content to leave the puppet master on the new DNS name, you can stop now;
-otherwise, continue to step 3.
+content to leave the puppet master on the new DNS name, you can stop now
+and change your new node bootstrapping process to use the new name; otherwise,
+continue to step 3.
 
 **Schedule steps 3-5 carefully,** as step 4 entails a temporary disruption of
 service.
