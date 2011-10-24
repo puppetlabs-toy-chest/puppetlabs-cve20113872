@@ -1,3 +1,11 @@
+2011-10-24 Puppet Labs <support@puppetlabs.com> - 0.0.4
+* Add support for --dns_alt_names to the foss remediation process
+  As per https://github.com/puppetlabs/puppetlabs-cve20113872/issues/71
+  the FOSS scripts do not take into account the situation where Puppet has
+  been upgraded before running through the remedy process.  As of the 0.0.4
+  release the correct options are used depending on the version of Puppet
+  being processed.
+
 2011-10-24 Puppet Labs <support@puppetlabs.com> - 0.0.3
 * Fix premature exit with ((idx++)) when idx=0 on some platforms
 * Fix step5 use of --certdnsnames if PE has been upgraded already
