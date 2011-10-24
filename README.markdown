@@ -31,7 +31,8 @@ vulnerable. All Puppet Enterprise users have used `certdnsnames` at some
 point.
 
 To quickly test whether you are vulnerable, you can use the `scan_certs`
-script included in this module's `bin/` directory:
+script included with this module. (Use the copy in `bin/` for Puppet Enterprise,
+and the copy in `bin/webrick` for open-source Puppet.)
 
     # bin/scan_certs
 
@@ -43,7 +44,14 @@ script included in this module's `bin/` directory:
 
 **This script is not infallible,** as it relies on the Puppet CA's certificate
 cache. If the cache has ever been deleted or modified, the script may return a
-false negative. If in doubt, we recommend remediating the vulnerability.
+false negative. You can also examine the local cert on any agent node by
+running: 
+
+    openssl x509 -text -noout -in $(puppet agent --configprint hostcert)
+
+...and looking for the X509v3 Subject Alternative Name field.
+
+When in doubt, we recommend remediating the vulnerability.
 
 ## How to Remediate CVE-2011-3872
 
