@@ -1,0 +1,188 @@
+#! /opt/puppet/bin/ruby
+#
+# PE_SPECIFIC - Note the PE specific ruby interpreter.  A wrapper script will
+# need to be generated if this progress script is to be generalized.
+
+require 'date'
+require 'pathname'
+require 'yaml'
+
+module CVE20113872
+  class CheckProgress
+    # The puppet executable
+    attr_accessor :puppet
+    # The folder node progress files are located in
+    # Usually $yamldir/cve20113872/progress_${agent_certname}.yaml
+    attr_accessor :yamldir
+    attr_accessor :cadir
+    attr_accessor :nodes
+
+    def clear_nodes
+      @nodes = Hash.new do |h,k|
+        h[k] = {
+          'step'    => 0,
+          'message' => 'No Progress',
+          'bucket'  => 'Potentially Vulnerable',
+        }
+      end
+    end
+
+    def initialize(options = {})
+      @puppet = options[:puppet] || "/opt/puppet/bin/puppet"
+      if ! options[:yamldir] then
+        raise RuntimeError, "#{puppet} must be executable if yamldir is not provided" unless File.executable? @puppet
+        @yamldir = %x{#{puppet} master --configprint yamldir}.chomp
+      else
+        @yamldir = options[:yamldir]
+      end
+      if ! options[:cadir] then
+        raise RuntimeError, "#{puppet} must be executable if cadir is not provided" unless File.executable? @puppet
+        @cadir = %x{#{puppet} master --configprint cadir}.chomp
+      else
+        @cadir = options[:cadir]
+      end
+      clear_nodes
+      self
+    end
+
+    # Create a key in the nodes hash for each node who has contacted the master
+    # in the last 30 days.  The method we use is looking at the mtime of the
+    # node cache.
+    def load_active_nodes
+      now = Time.now
+      dir = Pathname.new(File.join(yamldir, "node"))
+      return unless File.directory?(dir)
+      Dir.chdir(dir.to_s)
+      # Select files modified within the last 30 days
+      files = dir.entries.select do |f|
+        f.extname == '.yaml' and (now - f.mtime).to_i < 2592000
+      end
+
+      files.each do |file|
+        name = file.basename('.yaml').to_s
+        @nodes[name]['timestamp'] = file.mtime
+      end
+      @nodes
+    end
+
+    # Similar to load_active_nodes but load the YAML files written by the
+    # cve20113872_store_progress puppet function and merge the hashes on top of
+    # the active nodes
+    def load_node_progress
+      dir = Pathname.new(File.join(yamldir, "cve20113872"))
+      return unless File.directory?(dir)
+      Dir.chdir(dir.to_s)
+      # Select files modified within the last 30 days
+      files = dir.entries.select do |f|
+        f.extname == '.yaml'
+      end
+      files.each do |file|
+        hsh = YAML.load_file(file)
+        @nodes.merge!(hsh) do |certname, old_hsh, new_hsh|
+          filter_nodes_into_buckets(old_hsh.merge(new_hsh))
+        end
+      end
+      @nodes
+    end
+
+    # Given a node status hash, check if it has a cert
+    # or csr.  If it does, record the progress, if not
+    # set the progress back to step 2.
+    def filter_nodes_into_buckets(node_hsh = {})
+      if node_hsh['step'] == 2; then
+        node_hsh['bucket'] = 'Risk Mitigated (Using new DNS name)'
+      end
+      return node_hsh unless node_hsh['step'] > 2
+      if File.exists?(File.join(@cadir, "signed", "#{node_hsh['agent_certname']}.pem"))
+        node_hsh['message'] = 'OK: Agent certificate already signed'
+        node_hsh['bucket'] = 'Risk Mitigated (Issued a new Cert)'
+      elsif File.exists?(File.join(@cadir, "requests", "#{node_hsh['agent_certname']}.pem"))
+        node_hsh['message'] = 'OK: Agent submitted a pending CSR'
+        node_hsh['bucket'] = 'Risk Mitigated (Pending CSR)'
+      else
+        node_hsh['step'] = 2
+        node_hsh['message'] = 'OK: Agent received step 4 catalog but has yet to submit a new CSR'
+        node_hsh['bucket'] = 'Risk Mitigated (Using new DNS name)'
+      end
+      node_hsh
+    end
+
+    def display(options = {})
+      time_format = '%Y-%m-%d %H:%M:%S'
+
+      case options[:render_as]
+      when :yaml
+        puts nodes.to_yaml
+      else
+        total = nodes.keys.length
+        # Gather a total for each step.  The step will be the key of the result
+        # and the value will be the total number of nodes at that step.
+        step_totals =  nodes.reduce(Hash.new() { |h,k| h[k] = 0 }) do |hsh, (node, node_hsh)|
+          hsh[node_hsh['step']] += 1
+          hsh['total'] += 1
+          hsh
+        end
+        # We want counts for these steps at the minimum
+        puts "Status as of: #{Time.now.strftime(time_format)}"
+        puts
+        puts "    %40s %6d *" % [ "Total Nodes:", step_totals['total'] ]
+        puts "    %40s %6d (%3.1f%%)" % [ "Step 0 (Has not run):", step_totals[0], step_totals[0] * 100 / step_totals['total'] ]
+        puts "    %40s %6d (%3.1f%%)" % [ "Step 2 (DNS Switch):", step_totals[2], step_totals[2] * 100 / step_totals['total'] ]
+        puts "    %40s %6d (%3.1f%%)" % [ "Step 4 (SSL Switch):",  step_totals[4], step_totals[4] * 100 / step_totals['total'] ]
+        puts
+        puts " * Total of the nodes active within the last 30 days"
+        puts
+        # Now we want our bucket totals.  These give more concrete status of risk mitigation.
+        bucket_totals = nodes.reduce(Hash.new() { |h,k| h[k] = 0 }) do |hsh, (node, node_hsh)|
+          hsh[node_hsh['bucket']] += 1
+          hsh
+        end
+        bucket_totals.keys.sort.each do |bucket|
+          puts "    %40s %6d (%3.1f%%)" % [ "#{bucket}:", bucket_totals[bucket], bucket_totals[bucket] * 100 / step_totals['total'] ]
+        end
+        # Get a total of "Risk Mitigated" buckets
+        mitigated_count = bucket_totals.reduce(0) do |mitigated, (bucket, bucket_count)|
+          mitigated += bucket_count if bucket =~ /Risk Mitigated/
+          mitigated
+        end
+        puts "    --------------------------------------------------------"
+        puts "    %40s %6d (%3.1f%%)" % [ "Total of Nodes Remediated:", mitigated_count, mitigated_count * 100 / step_totals['total'] ]
+        puts
+      end
+    end
+
+    def reload
+      clear_nodes
+      load_active_nodes
+      load_node_progress
+    end
+
+    def run(options = {})
+      reload
+      display(options)
+    end
+
+    def display_help
+      puts "Help:"
+      puts
+      puts "  --yaml - Display detailed node status"
+      puts
+    end
+
+    def main(argv=nil)
+      argv = argv ? argv.dup : ARGV.dup
+      if argv.include?('--help')
+        display_help
+        exit(0)
+      end
+      options = {}
+      options[:render_as] = :yaml if argv.include?('--yaml')
+      run(options)
+    end
+  end
+end
+
+# Sometimes I miss Python...
+if __FILE__ == $0
+  CVE20113872::CheckProgress.new.main(ARGV)
+end
