@@ -8,10 +8,13 @@ vulnerability.
 
 Please see the detailed usage guides at:
 
-* [README-detailed.markdown](./README-detailed.markdown) (for remediating your
+* [README-detailed.markdown][detailed] (for remediating your
   site with Puppet)
-* [README-ssh-only.markdown](./README-manual-ssh.markdown) (For remediating your
+* [README-ssh-only.markdown][ssh] (For remediating your
   site with SSH)
+
+[detailed]: https://github.com/puppetlabs/puppetlabs-cve20113872/blob/master/README-detailed.markdown
+[ssh]: https://github.com/puppetlabs/puppetlabs-cve20113872/blob/master/README-ssh-only.markdown
 
 ## Summary
 
@@ -60,11 +63,11 @@ There are multiple ways to meet the second requirement. You can:
   name at your convenience
 
 **TO REMEDIATE YOUR SITE WITH PUPPET,** see the
-[README-detailed.markdown](./README-detailed.markdown) file included with this
+[README-detailed.markdown][detailed] file included with this
 module.
 
 **TO REPLACE THE CA IMMEDIATELY WITH SSH,** see the
-[README-ssh-only.markdown](./README-ssh-only.markdown) file included with this
+[README-ssh-only.markdown][ssh] file included with this
 module.
 
 ## More Information
