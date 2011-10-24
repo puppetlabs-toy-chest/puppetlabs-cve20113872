@@ -1,7 +1,5 @@
-#! /opt/puppet/bin/ruby
+#! /usr/bin/env ruby
 #
-# PE_SPECIFIC - Note the PE specific ruby interpreter.  A wrapper script will
-# need to be generated if this progress script is to be generalized.
 
 require 'date'
 require 'pathname'
@@ -28,15 +26,13 @@ module CVE20113872
     end
 
     def initialize(options = {})
-      @puppet = options[:puppet] || "/opt/puppet/bin/puppet"
+      @puppet = options[:puppet] || "puppet"
       if ! options[:yamldir] then
-        raise RuntimeError, "#{puppet} must be executable if yamldir is not provided" unless File.executable? @puppet
         @yamldir = %x{#{puppet} master --configprint yamldir}.chomp
       else
         @yamldir = options[:yamldir]
       end
       if ! options[:cadir] then
-        raise RuntimeError, "#{puppet} must be executable if cadir is not provided" unless File.executable? @puppet
         @cadir = %x{#{puppet} master --configprint cadir}.chomp
       else
         @cadir = options[:cadir]
