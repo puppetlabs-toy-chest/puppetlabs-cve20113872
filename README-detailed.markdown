@@ -26,9 +26,13 @@ This means that if the following two conditions are both met:
   alternative name that has ever been included in the `certdnsnames` setting
 
 ...then your site probably contains agent certificates that can impersonate
-the puppet master in a man-in-the-middle attack.
+the puppet master in a man-in-the-middle attack. You can quickly check for such
+certificates with the included `bin/scan_certs` and `bin/webrick/scan_certs`
+scripts, or you can examine any individual certificate by running 
+`openssl x509 -text -noout -in <certificate pem file>` and looking for the
+X509v3 Subject Alternative Name field.
 
-**The threat posed by such certificates will persist even after upgrading to
+**The threat posed by these certificates will persist even after upgrading to
 an unaffected version of Puppet.** This module uses Puppet to help you to
 quickly neutralize these certificates.
 
@@ -64,7 +68,8 @@ You have three main options for remediating the AltNames vulnerability.
 2. If mass SSH is impractical and you **don't mind permanently changing the
    puppet master's DNS name,** you can protect yourself by running only the
    first two steps of this module. Continue reading for instructions, and stop
-   after step 2.
+   after step 2. You may need to modify your new node bootstrapping process to
+   use the new DNS name.
 3. If mass SSH is impractical and you **wish to continue using the current DNS
    name(s),** (or if you just want long-term protection against accidental reuse
    of the old names) you should run steps 1 through 5 of the remediation module.
@@ -239,6 +244,10 @@ through this step; simply run:
 
     bin/check_progress
 
+or:
+
+    bin/webrick/check_progress
+
 ...and check the percentage of nodes to have completed step 2.
 
 #### Site status after running step 2:
@@ -253,8 +262,9 @@ After every agent node has checked in once:
 
 **Your site is now protected.** However, all of the master's previous DNS
 names are unsafe to use for the remaining lifetime of the CA. If you are
-content to leave the puppet master on the new DNS name, you can stop now;
-otherwise, continue to step 3.
+content to leave the puppet master on the new DNS name, you can stop now
+and change your new node bootstrapping process to use the new name; otherwise,
+continue to step 3.
 
 **Schedule steps 3-5 carefully,** as step 4 entails a temporary disruption of
 service.
@@ -301,7 +311,7 @@ Do not re-start the puppet master; proceed directly to step 4.
 
 This step:
 
-* Adds the `cve20113972::step2` class to all agent catalogs. This class:
+* Adds the `cve20113972::step4` class to all agent catalogs. This class:
     * Moves the agent's `ssldir` to a backup location.
     * Securely configures the agent to trust the new CA (and _only_ the new CA).
     * Configures the agent to contact the master at its old DNS name
@@ -333,6 +343,10 @@ through this step; simply run:
 
     bin/check_progress
 
+or:
+
+    bin/webrick/check_progress
+
 ...and check the percentage of nodes to have completed step 4.
 
 #### Site status after running step 4:
@@ -354,7 +368,7 @@ retrieve and run their normal catalogs until the end of step 5.**
 
 **You should not run step 5 until all agents have run once.** If you run step
 5 too early, any agents who have not run their step 4 catalogs **will be in an
-"orphaned" state** and must be repaired manually. Use the `bin/check_progress`
+"orphaned" state** and must be repaired manually. Use the `check_progress`
 script to check how much of your population has been migrated to the new CA.
 
 Orphaned nodes can be repaired by logging in, moving the `ssldir` to a new
