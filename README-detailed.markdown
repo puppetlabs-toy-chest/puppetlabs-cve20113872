@@ -239,6 +239,10 @@ through this step; simply run:
 
     bin/check_progress
 
+or:
+
+    bin/webrick/check_progress
+
 ...and check the percentage of nodes to have completed step 2.
 
 #### Site status after running step 2:
@@ -333,6 +337,10 @@ through this step; simply run:
 
     bin/check_progress
 
+or:
+
+    bin/webrick/check_progress
+
 ...and check the percentage of nodes to have completed step 4.
 
 #### Site status after running step 4:
@@ -354,7 +362,7 @@ retrieve and run their normal catalogs until the end of step 5.**
 
 **You should not run step 5 until all agents have run once.** If you run step
 5 too early, any agents who have not run their step 4 catalogs **will be in an
-"orphaned" state** and must be repaired manually. Use the `bin/check_progress`
+"orphaned" state** and must be repaired manually. Use the `check_progress`
 script to check how much of your population has been migrated to the new CA.
 
 Orphaned nodes can be repaired by logging in, moving the `ssldir` to a new

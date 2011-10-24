@@ -31,7 +31,8 @@ vulnerable. All Puppet Enterprise users have used `certdnsnames` at some
 point.
 
 To quickly test whether you are vulnerable, you can use the `scan_certs`
-script included in this module's `bin/` directory:
+script included with this module. (Use the copy in `bin/` for Puppet Enterprise,
+and the copy in `bin/webrick` for open-source Puppet.)
 
     # bin/scan_certs
 
