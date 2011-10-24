@@ -1,41 +1,77 @@
-CVE-2011-3872 Remediation Toolkit Module
-========================================
+CVE-2011-3872 Remediation Toolkit -- Detailed Walkthrough
+=========================================================
 
-This module will help you permanently protect your site from attacks on CVE-2011-3872 (the AltNames vulnerability). 
+This module will help you permanently remediate the CVE-2011-3872 AltNames
+vulnerability.
 
-## The AltNames vulnerability in brief
+How the Vulnerability Works
+---------------------------
 
-Puppet agent identifies the puppet master by comparing the puppet master DNS name it knows with the names in the master's certificate. The master's cert can include both a common name and a set of alternative DNS names. 
+Puppet agent identifies the puppet master by comparing the puppet master DNS
+name it knows with the names in the master's certificate. The master's cert
+can include both a primary name (Subject CN) and a set of alternate DNS names
+(Subject Alternative Name).
 
-Alternative DNS names are an optional feature for master certs, and they have to be specifically enabled with the `certdnsnames` option. **In versions prior to 2.6.12 and 2.7.6, the Puppet CA will improperly insert any `certdnsnames` values into _agent_ certificates as well as master certificates.** 
+Alternate DNS names are optional for master certs, and have to be specifically
+enabled with the `certdnsnames` option. **In versions prior to 2.6.12 and
+2.7.6, the Puppet CA will improperly insert any `certdnsnames` values into
+_agent_ certificates as well as master certificates.** This bug was introduced
+in Puppet 0.24.0.
 
 This means that if the following two conditions are both met:
 
-* Your puppet master has ever had its `certdnsnames` setting turned on during the current CA's lifetime
-* Any of your agent nodes are configured to contact the master at a DNS alternative name that has ever been included in the `certdnsnames` setting
+* Your puppet master has ever had its `certdnsnames` setting turned on during
+  the current CA's lifetime
+* Any of your agent nodes are configured to contact the master at a DNS
+  alternative name that has ever been included in the `certdnsnames` setting
 
-...then your site probably contains certificates that can be used to impersonate the puppet master in a man-in-the-middle attack. You should update Puppet and/or deactivate the `certdnsnames` setting, but **existing certificates will remain dangerous even after doing so.** 
+...then your site probably contains agent certificates that can impersonate
+the puppet master in a man-in-the-middle attack.
 
-This module will help you to make those existing certificates safe.
+**The threat posed by such certificates will persist even after upgrading to
+an unaffected version of Puppet.** This module uses Puppet to help you to
+quickly neutralize these certificates.
 
-## How the fix works
+How the Fix Works
+-----------------
 
-Since two conditions must be true for your site to be vulnerable, you can protect yourself by breaking either condition:
+Since two conditions must be true for your site to be vulnerable, you can
+protect yourself by breaking either condition:
 
-* Configuring all agent nodes to reach the master at a new DNS name (which has never been included in a certificate) will prevent them from being spoofed by a rogue agent cert with the old DNS names.
-* Migrating all machines to a new CA which has never had `certdnsnames` turned on will permanently disarm any rogue certs, since machines on the new CA will not recognize those certs as valid. 
+* If you configure all agent nodes to reach the master at a new, "clean" DNS
+  name, they cannot be spoofed by rogue agent certs with the old DNS names.
+* If you migrate all machines to a new CA which has never had `certdnsnames`
+  turned on, every dangerous certificate will be invalidated.
 
-This module automates _both_ of these tasks. Steps 1 and 2 will secure your site immediately by configuring all agents to use a new DNS name for the puppet master, and will turn off `certdnsnames` if you haven't already. Steps 3 through 5 will provide long-term protection (and let you resume use of your previous DNS names) by migrating all machines to a new CA.
+This module can break both conditions of the vulnerability. 
 
-## Choosing your repair plan
+**Steps 1 and 2** will secure your site immediately by configuring all agents
+to use a new DNS name for the puppet master; they will also turn off the
+`certdnsnames` setting if it isn't already deactivated.
 
-You have several options for remediating the AltNames vulnerability.
+**Steps 3 through 5** will provide long-term protection by migrating all
+machines to a new CA. This will "clean" and restore your puppet master's
+previous DNS name.
 
-- If you have a **small-to-moderate number of nodes and can trivially SSH to all of them,** you can protect yourself permanently without using this module --- simply delete the `ssldir` from the master and all agents, re-generate the master's certificate, and sign new agent certificates. **See the README-easy-ssh-fix.markdown file** for step-by-step instructions.
-- If mass SSH is impractical but you **don't mind permanently changing the puppet master's DNS name,** you can protect yourself by running only the first two steps of this module. Continue reading for instructions, and stop after step 2.
-- If mass SSH is impractical and you **wish to continue using the current DNS name(s),** (or if you just want long-term protection against accidental re-use of the old names) you should run steps 1 through 5 of the remediation module. Continue reading for instructions.
+Repair Options
+--------------
 
-## Remediating the AltNames vulnerability
+You have three main options for remediating the AltNames vulnerability.
+
+1. If you have a **small-to-moderate number of nodes and can trivially SSH to
+   all of them,** you can use a simpler remediation workflow. Disregard the rest
+   of this guide and consult README-ssh-only.markdown.
+2. If mass SSH is impractical and you **don't mind permanently changing the
+   puppet master's DNS name,** you can protect yourself by running only the
+   first two steps of this module. Continue reading for instructions, and stop
+   after step 2.
+3. If mass SSH is impractical and you **wish to continue using the current DNS
+   name(s),** (or if you just want long-term protection against accidental reuse
+   of the old names) you should run steps 1 through 5 of the remediation module.
+   Continue reading for instructions.
+
+Walkthrough
+-----------
 
 To remediate your site with this module, you must: 
 
@@ -43,18 +79,27 @@ To remediate your site with this module, you must:
 * Create a new temporary DNS entry for the puppet master
 * Install the module
 * Ensure that your modules will not interfere with the remediation
-* Run steps 1 and 2 immediately
-* Optionally, run steps 3 through 5 at your earliest convenience
+* Run steps 1 and 2 to secure your site
+* Optionally, run steps 3 through 5 to "clean" the puppet master's previous DNS
+  names
 
-### Stop adding new nodes
+### Stop Adding New Nodes
 
-You should not add nodes to your Puppet infrastructure during the remediation of this vulnerability, as there is an increased chance of putting new nodes into an "orphaned" state.
+You should not add nodes to your Puppet infrastructure during the remediation
+of this vulnerability, as there is an increased chance of putting new nodes
+into an "orphaned" state.
 
-### Create a temporary DNS entry for the puppet master
+### Create a New DNS Entry for the Puppet Master
 
-As described above (see "How the fix works"), this module first secures your site by configuring agents to contact the master at a new DNS name. Before it can do this, you must choose a name yourself and edit your site's DNS configuration to make the master reachable at it. Configuring DNS is beyond the scope of this document. 
+This module secures your site by configuring agents to contact the master at a
+temporary (or permanent) new DNS name. Before it can do this, you must choose
+a name yourself and edit your site's DNS configuration to point it at the
+puppet master. Configuring DNS is beyond the scope of this document.
 
-If your site's change-management policies do not allow timely modification of DNS records, you can use Puppet itself to add a host entry on every agent node. Simply add a host resource like the one below to your site.pp file, and allow every agent to run once.
+If your site's change-management policies do not allow timely modification of
+DNS records, you can use Puppet itself to add a host entry on every agent
+node. Simply add a host resource like the one below to your site.pp manifest
+(outside of any node statements), and allow every agent to run once.
 
     host {'puppetmaster.new.domain.com':
       ensure  => present,
@@ -62,44 +107,52 @@ If your site's change-management policies do not allow timely modification of DN
       comment => 'Temporary puppet master hostname for remediating CVE-2011-3872'
     }
 
-You may want to log into a subset of agent nodes and ping the new name, to ensure that the DNS or host entry is working properly.
+You may wish to log in to a few agent nodes and test that the new name
+resolves correctly.
 
-Although we refer to this as a temporary name, you may choose to make it permanent by stopping the remediation after step 2.
+### Install the Module 
 
-### Install the module 
+This module must be installed in Puppet's `modulepath` before you can use it.
+If you have the puppet-module tool installed, you can run the following:
 
-This module must be installed to one of the directories in Puppet's `modulepath` before you can use it. You can discover your `modulepath` by running `puppet master --configprint modulepath`. The main modules directory will usually be `/etc/puppetlabs/puppet/modules` (for Puppet Enterprise) or `/etc/puppet/modules` (for open source Puppet).
-
-To install the module from the Forge using the Puppet module tool, `cd` to your main modules directory and run the following:
-
-    puppet-module install puppetlabs-cve20113872
-
-To install the module from a tarball, simply unarchive it and move it to your modules directory, ensuring that it is named `cve20113872`. (Remove the `puppetlabs-` prefix if present.)
-
-For developers: To install the module from source in a way that mimics the Forge install, run the following: 
-
-    cd <source directory>
-    rake build
-    cd <modules directory>
+    cd /tmp
+    wget http://links.puppetlabs.com/puppetlabs-cve20113872-0.0.1.tar.gz
+    cd $(puppet master --configprint confdir)/modules
     puppet-module install /tmp/puppetlabs-cve20113872-0.0.1.tar.gz
 
-### Avoid interference
+If you're running an older version of the puppet-module tool, you may need to:
+
+    mv puppetlabs-cve20113872 cve20113872
+
+If you are not running the module-tool, you can simply unarchive the tarball,
+rename the directory to `cve21003872`, and move it to your modules directory.
+
+### Avoid Interference
 
 This module makes changes to the following files on every puppet agent node: 
 
 * The main puppet.conf configuration file
-* The contents of Puppet's `ssldir` (run `puppet agent --configprint ssldir` to display the path)
+* The contents of Puppet's `ssldir` (run `puppet agent --configprint ssldir` to
+  locate this directory)
 
-If you are using Puppet to manage any of these files --- that is, managing Puppet _with_ Puppet --- you **must** add a `noop => true` metaparameter to all such resources until the remediation is complete. After the remediation, you must ensure that your resources won't undo any permanent changes made by this module before turning them back on.
+If you are using Puppet to manage any of these files -- that is, managing
+Puppet _with_ Puppet -- you **must** add a `noop => true` metaparameter to all
+such resources until the remediation is complete. After the remediation, you
+must ensure that your resources won't undo any permanent changes made by this
+module before turning them back on.
 
 ### Step 1
 
 This step:
 
-* Turns off the master's `certdnsnames` setting, if it hasn't already been turned off.
-* Issues a new certificate for the puppet master. This certificate will contain all of the previous DNS names for the puppet master, with the addition of a new DNS name of your choice.
+* Turns off the master's `certdnsnames` setting, if it hasn't already been
+  turned off.
+* Issues a new certificate for the puppet master. This certificate will contain
+  all of the previous DNS names for the puppet master, with the addition of a
+  new DNS name of your choice.
 
-This step modifies only the puppet master. You can perform the next step immediately.
+This step modifies only the puppet master. You can perform the next step
+immediately.
 
 #### PE Users
 
@@ -116,16 +169,19 @@ TODO
 - CA will create dangerous certs? **NO.** (fixed!)
 - Agents can be spoofed by agent certs? **YES.** (not fixed)
 - Potentially dangerous certs are still valid? **YES.** (not fixed)
-- Agents can operate normally and receive catalogs from master? **YES.** (business as usual)
+- Agents can operate normally and receive catalogs from master? **YES.**
+  (business as usual)
 
 ### Step 2
 
 This step: 
 
 * Adds the `cve20113972::step2` class to all agent catalogs. This class:
-    * Configures each agent node to contact the puppet master at the new DNS name.
+    * Configures each agent node to contact the puppet master at the new DNS
+      name.
 
-This step modifies agent nodes. **All agent nodes must run once before performing the next step.** 
+This step modifies agent nodes. **All agent nodes must run once before
+performing the next step.**
 
 #### PE Users
 
@@ -137,6 +193,16 @@ From the top directory of this module, run the following:
 
 TODO
 
+#### Checking agent status
+
+This step is not complete until every agent node has run once. You can use
+the included `check_progress` script to view a summary of your nodes' progress
+through this step; simply run:
+
+    bin/check_progress
+
+...and check the percentage of nodes to have completed step 2.
+
 #### Site status after running step 2:
 
 After every agent node has checked in once:
@@ -144,13 +210,19 @@ After every agent node has checked in once:
 - CA will create dangerous certs? **NO.** (fixed!)
 - Agents can be spoofed by agent certs? **NO.** (fixed!)
 - Potentially dangerous certs are still valid? **YES.** (not fixed)
-- Agents can operate normally and receive catalogs from master? **YES.** (business as usual)
+- Agents can operate normally and receive catalogs from master? **YES.**
+  (business as usual)
 
-**Your site is now protected.** However, all of the master's previous DNS names are unsafe to use for the remaining lifetime of the CA. If you are content to leave the puppet master on the new DNS name, you can stop now; otherwise, continue to step 3.
+**Your site is now protected.** However, all of the master's previous DNS
+names are unsafe to use for the remaining lifetime of the CA. If you are
+content to leave the puppet master on the new DNS name, you can stop now;
+otherwise, continue to step 3.
 
-**Schedule steps 3-5 carefully,** as step 4 entails a temporary disruption of service.
+**Schedule steps 3-5 carefully,** as step 4 entails a temporary disruption of
+service.
 
-**You should not run step 3 until all agents have run once and your full site is protected.**
+**You should not run step 3 until all agents have run once and your full site
+is protected.**
 
 ### Step 3
 
@@ -158,9 +230,11 @@ This step:
 
 * Generates a new CA certificate.
 * Configures Puppet to sign any NEW certificate requests using the new CA.
-* Prepares the puppet master to trust agent certificates from both the new and the old CA. 
+* Prepares the puppet master to trust agent certificates from both the new and
+  the old CA. 
 
-This step modifies only the puppet master. You can perform the next step immediately.
+This step modifies only the puppet master. You can perform the next step
+immediately.
 
 #### PE Users
 
@@ -177,7 +251,8 @@ TODO
 - CA will create dangerous certs? **NO.** (fixed!)
 - Agents can be spoofed by agent certs? **NO.** (fixed!)
 - Potentially dangerous certs are still valid? **YES.** (not fixed)
-- Agents can operate normally and receive catalogs from master? **YES.** (business as usual)
+- Agents can operate normally and receive catalogs from master? **YES.**
+  (business as usual)
 
 ### Step 4
 
@@ -190,7 +265,8 @@ This step:
     * Restarts puppet agent.
     * Submits a new certificate signing request.
 
-This step modifies agent nodes. **All agent nodes must run once before performing the next step.** 
+This step modifies agent nodes. **All agent nodes must run once before
+performing the next step.**
 
 #### PE Users
 
@@ -202,6 +278,16 @@ From the top directory of this module, run the following:
 
 TODO
 
+#### Checking agent status
+
+This step is not complete until every agent node has run once. You can use
+the included `check_progress` script to view a summary of your nodes' progress
+through this step; simply run:
+
+    bin/check_progress
+
+...and check the percentage of nodes to have completed step 4.
+
 #### Site status after running step 4:
 
 After every agent node has checked in once:
@@ -209,15 +295,25 @@ After every agent node has checked in once:
 - CA will create dangerous certs? **NO.** (fixed!)
 - Agents can be spoofed by agent certs? **NO.** (fixed!)
 - Potentially dangerous certs are still valid? **NO.** (fixed!)
-- Agents can operate normally and receive catalogs from master? **NO.** (disruption of service)
+- Agents can operate normally and receive catalogs from master? **NO.**
+  (disruption of service)
 
-**The puppet master's previous DNS names have been rehabilitated,** and are safe to use in the future; accordingly, this step restores the agent's configuration so it will use the previous name.
+**The puppet master's previous DNS names have been rehabilitated,** and are
+safe to use in the future; accordingly, this step restores the agent's
+configuration so it will use the previous name.
 
-**Note that agent nodes which have run a step 4 catalog will be unable to retrieve and run their normal catalogs until the end of step 5.**
+**Note that agent nodes which have run a step 4 catalog will be unable to
+retrieve and run their normal catalogs until the end of step 5.**
 
-**You should not run step 5 until all agents have run once.** If you run step 5 too early, any agents who have not run their step 4 catalogs **will be in an "orphaned" state** and must be repaired manually. Use the included status tool <!-- TODO --> to check whether your entire population has been migrated to the new CA. 
+**You should not run step 5 until all agents have run once.** If you run step
+5 too early, any agents who have not run their step 4 catalogs **will be in an
+"orphaned" state** and must be repaired manually. Use the included status tool
+<!-- TODO --> to check whether your entire population has been migrated to the
+new CA.
 
-Orphaned nodes can be repaired by logging in, moving the `ssldir` to a new location, and restarting puppet agent. Run `puppet agent --configprint ssldir` to locate the `ssldir`.
+Orphaned nodes can be repaired by logging in, moving the `ssldir` to a new
+location, and restarting puppet agent. Run `puppet agent --configprint ssldir`
+to locate the `ssldir`.
 
 ### Step 5
 
@@ -246,9 +342,15 @@ After every agent node has checked in once:
 - CA will create dangerous certs? **NO.** (fixed!)
 - Agents can be spoofed by agent certs? **NO.** (fixed!)
 - Potentially dangerous certs are still valid? **NO.** (fixed!)
-- Agents can operate normally and receive catalogs from master? **YES.** (service has resumed)
+- Agents can operate normally and receive catalogs from master? **YES.**
+  (service has resumed)
 
 This step completes the full remediation. 
 
-**You must still sign any pending certificate signing requests** to reenable normal agent traffic --- if you don't use autosign, you should manually sign these requests with the `puppet cert --list` and `puppet cert --sign` commands. (If you recognize every certname in the list of CSRs and are confident that none were submitted by malicious nodes, you may wish to use `puppet cert --sign --all`.)
+**You must still sign any pending certificate signing requests** to reenable
+normal agent traffic -- if you don't use autosign, you should manually sign
+these requests with the `puppet cert --list` and `puppet cert --sign`
+commands. (If you recognize every certname in the list of CSRs and are
+confident that none were submitted by malicious nodes, you may wish to use
+`puppet cert --sign --all`.)
 
