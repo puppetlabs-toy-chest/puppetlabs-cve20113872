@@ -12,6 +12,7 @@ task :default => [:build]
 
 desc "Build Puppet Module Package"
 task :build do
+  system("gimli README*.markdown")
   system("puppet-module build")
 end
 

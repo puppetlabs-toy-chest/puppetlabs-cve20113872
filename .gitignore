@@ -1,4 +1,5 @@
 pkg/
 .DS_Store
 metadata.json
+README*.pdf
 coverage/
