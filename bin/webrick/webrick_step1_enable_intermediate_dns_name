@@ -13,18 +13,6 @@ else
   shift
 fi
 
-# Check if the master has been upgraded to a patched Puppet Version
-# We don't support this yet.
-if puppet master --configprint dns_alt_names &>/dev/null; then
-  echo "PENDING: It appears puppet on this node has already been upgraded to a version which" >&2
-  echo "Closes the CVE-2011-3872 vulnerability.  Nodes may still be vulnerable and their certificates" >&2
-  echo "re-issued, however this program has not been patched to support the --dns_alt_names option" >&2
-  echo "introduced in fixed versions of Puppet." >&2
-  echo "" >&2
-  echo "Please see https://github.com/puppetlabs/puppetlabs-cve20113872/issues/71 for up to date information" >&2
-  exit 2
-fi
-
 # Check if the master is running.
 if [[ -f $(puppet master --configprint pidfile) ]]; then
   echo "You must stop your Webrick puppet master before running this script" >&2
@@ -32,7 +20,24 @@ if [[ -f $(puppet master --configprint pidfile) ]]; then
 fi
 
 vardir="$(puppet master --configprint vardir)"
-certdnsnames="$(puppet master --configprint certdnsnames)"
+
+# Figure out if we've been patched or not.
+if puppet master --configprint dns_alt_names &>/dev/null; then
+  HAVE_PATCHED='true'
+  alt_names_option="dns_alt_names"
+  alt_names_separator=","
+  # If the user has upgraded, but not reconfigured, then this might actually be
+  # empty and certdnsnames is still in use.
+  alt_names_value="$(puppet master --configprint dns_alt_names)"
+  if [[ -z "${alt_names_value}" ]]; then
+    alt_names_value="$(puppet master --configprint certdnsnames 2>/dev/null | sed 's/:/,/g')"
+  fi
+else
+  HAVE_PATCHED='false'
+  alt_names_option="certdnsnames"
+  alt_names_separator=":"
+  alt_names_value="$(puppet master --configprint certdnsnames)"
+fi
 
 # Write the new DNS name to ${vardir}/cve20113872/dns_name
 if [[ ! -d "${vardir}/cve20113872" ]]; then
@@ -42,7 +47,7 @@ if [[ ! -d "${vardir}/cve20113872" ]]; then
 fi
 echo "${new_master_cert}" > "${vardir}/cve20113872/dns_name"
 chmod 644 "${vardir}/cve20113872/dns_name"
-echo "${new_master_cert}:${certdnsnames}" > "${vardir}/cve20113872/alt_names"
+echo "${new_master_cert}${alt_names_separator}${alt_names_value}" > "${vardir}/cve20113872/alt_names"
 chmod 644 "${vardir}/cve20113872/alt_names"
 
 timestamp="$(ruby -e 'puts Time.now.to_i')"
@@ -107,7 +112,7 @@ echo "done." >&2
 # This strategy also avoids having to reconfigure apache and puppet.conf.  They can remain as is.
 echo -n "Re-issuing a new SSL certificate for ${old_master_cert} with intermediate DNS name ${new_master_cert} ..." >&2
 puppet cert --clean "${old_master_cert}" 2>&1 >/dev/null
-puppet cert --generate --certdnsnames "${new_master_cert}:${certdnsnames}" "${old_master_cert}" 2>&1 >/dev/null
+puppet cert --generate "--${alt_names_option}" "${new_master_cert}${alt_names_separator}${alt_names_value}" "${old_master_cert}" 2>&1 >/dev/null
 echo "done." >&2
 
 
