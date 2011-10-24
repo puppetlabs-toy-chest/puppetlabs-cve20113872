@@ -125,10 +125,12 @@ module CVE20113872
         # We want counts for these steps at the minimum
         puts "Status as of: #{Time.now.strftime(time_format)}"
         puts
-        puts "    %40s %6d *" % [ "Total Nodes:", step_totals['total'] ]
-        puts "    %40s %6d (%3.1f%%)" % [ "Step 0 (Has not run):", step_totals[0], step_totals[0] * 100 / step_totals['total'] ]
-        puts "    %40s %6d (%3.1f%%)" % [ "Step 2 (DNS Switch):", step_totals[2], step_totals[2] * 100 / step_totals['total'] ]
-        puts "    %40s %6d (%3.1f%%)" % [ "Step 4 (SSL Switch):",  step_totals[4], step_totals[4] * 100 / step_totals['total'] ]
+        puts "    %40s %6d *" % [ "Total Nodes:", total ]
+        if total > 0
+          puts "    %40s %6d (%3.1f%%)" % [ "Step 0 (Has not run):", step_totals[0], step_totals[0] * 100 / step_totals['total'] ]
+          puts "    %40s %6d (%3.1f%%)" % [ "Step 2 (DNS Switch):", step_totals[2], step_totals[2] * 100 / step_totals['total'] ]
+          puts "    %40s %6d (%3.1f%%)" % [ "Step 4 (SSL Switch):",  step_totals[4], step_totals[4] * 100 / step_totals['total'] ]
+        end
         puts
         puts " * Total of the nodes active within the last 30 days"
         puts
@@ -145,8 +147,10 @@ module CVE20113872
           mitigated += bucket_count if bucket =~ /Risk Mitigated/
           mitigated
         end
-        puts "    --------------------------------------------------------"
-        puts "    %40s %6d (%3.1f%%)" % [ "Total of Nodes Remediated:", mitigated_count, mitigated_count * 100 / step_totals['total'] ]
+        if total > 0
+          puts "    --------------------------------------------------------"
+          puts "    %40s %6d (%3.1f%%)" % [ "Total of Nodes Remediated:", mitigated_count, mitigated_count * 100 / step_totals['total'] ]
+        end
         puts
       end
     end
