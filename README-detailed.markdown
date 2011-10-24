@@ -26,9 +26,13 @@ This means that if the following two conditions are both met:
   alternative name that has ever been included in the `certdnsnames` setting
 
 ...then your site probably contains agent certificates that can impersonate
-the puppet master in a man-in-the-middle attack.
+the puppet master in a man-in-the-middle attack. You can quickly check for such
+certificates with the included `bin/scan_certs` and `bin/webrick/scan_certs`
+scripts, or you can examine any individual certificate by running 
+`openssl x509 -text -noout -in <certificate pem file>` and looking for the
+X509v3 Subject Alternative Name field.
 
-**The threat posed by such certificates will persist even after upgrading to
+**The threat posed by these certificates will persist even after upgrading to
 an unaffected version of Puppet.** This module uses Puppet to help you to
 quickly neutralize these certificates.
 
