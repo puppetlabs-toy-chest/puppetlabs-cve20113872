@@ -1,3 +1,7 @@
+2011-10-24 Puppet Labs <support@puppetlabs.com> - 0.0.2
+* Fix PATH quoting in PE remediation process script
+* This patch resolves a "could not find ruby" error
+
 2011-10-23 Puppet Labs <support@puppetlabs.com> - 0.0.1
 * Initial Release
 * Documentation, instructions, and helpful information about CVE-2011-3872
