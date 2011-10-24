@@ -22,7 +22,11 @@ old_ca_cn="$(puppet master --configprint ca_name)"
 
 apachevhost="/etc/puppetlabs/httpd/conf.d/puppetmaster.conf"
 timestamp="$(ruby -e 'puts Time.now.to_i')"
-idx=0
+
+# If this starts at 0, incrementing it will exit nonzero
+# See: https://gist.github.com/1310371
+# and https://github.com/puppetlabs/puppetlabs-cve20113872/issues/69
+idx=1
 
 # This is some shell magic to read a file into a variable if the
 # variable isn't already set.
