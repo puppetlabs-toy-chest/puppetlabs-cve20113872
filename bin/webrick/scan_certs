@@ -1,0 +1,148 @@
+#! /usr/bin/env ruby
+#
+# PE_SPECIFIC - Note the PE specific ruby interpreter.  A wrapper script will
+# need to be generated if this progress script is to be generalized.
+
+require 'pathname'
+require 'openssl'
+require 'yaml'
+
+module CVE20113872
+  class ScanCerts
+    attr_accessor :puppet
+    attr_accessor :cadir
+    attr_accessor :yamldir
+    attr_accessor :nodes
+
+    def initialize(options = {})
+      @puppet = options[:puppet] = "puppet"
+      if ! options[:yamldir] then
+        @yamldir = %x{#{puppet} master --configprint yamldir}.chomp
+      else
+        @yamldir = options[:yamldir]
+      end
+      if ! options[:cadir] then
+        @cadir = %x{#{puppet} master --configprint cadir}.chomp
+      else
+        @cadir = options[:cadir]
+      end
+      clear_nodes
+      self
+    end
+
+    def clear_nodes
+      @nodes = Hash.new do |h,k|
+        h[k] = {
+          'subjectAltNames' => [],
+          'bucket'          => 'Unknown Vulnerablity',
+        }
+      end
+    end
+
+    # This is adapted from the check_progress version of load_active_nodes The
+    # difference here is that we scan every single file found in the
+    # $cadir/signed directory.
+    def load_active_nodes
+      now = Time.now
+      dir = Pathname.new(File.join(cadir, "signed"))
+      return unless File.directory?(dir)
+      Dir.chdir(dir.to_s)
+      # Select files modified within the last 30 days
+      files = dir.entries.select do |f|
+        f.extname == '.pem'
+      end
+
+      files.each do |file|
+        name = file.basename('.pem').to_s
+        @nodes[name]['timestamp'] = file.mtime
+      end
+      @nodes
+    end
+
+    def reload
+      clear_nodes
+      load_active_nodes
+      load_node_certificates
+    end
+
+    def run(options = {})
+      reload
+      display(options)
+    end
+
+    # Given all the nodes in @nodes, load the certificate data.
+    def load_node_certificates
+      @nodes.merge!(@nodes) do |node, hsh1, hsh2|
+        crt_file = File.join(@cadir, "signed", "#{node}.pem")
+        if File.exists?(crt_file)
+          hsh2['has_cert'] = true
+          crt = OpenSSL::X509::Certificate.new(File::read(crt_file))
+          san = crt.extensions.detect do |extension|
+            extension.oid =~ /subjectAltName/
+          end
+          hsh2['subjectAltNames'] = san ? san.value.split(/,\s*/).collect { |e| e.gsub(/DNS:/, '') }.sort : []
+          hsh2['bucket'] = san ? "Potentially Vulnerable" : "No subjectAltName"
+        else
+          hsh2['has_cert'] = false
+        end
+        hsh1.merge(hsh2)
+      end
+    end
+
+    def display(options={})
+      time_format = '%Y-%m-%d %H:%M:%S'
+
+      case options[:render_as]
+      when :yaml
+        puts nodes.to_yaml
+      else
+        total = nodes.keys.length
+        # Now we want our bucket totals.  These give more concrete status of risk mitigation.
+        bucket_totals = nodes.reduce(Hash.new() { |h,k| h[k] = 0 }) do |hsh, (node, node_hsh)|
+          hsh[node_hsh['bucket']] += 1
+          hsh
+        end
+        puts
+        puts "Status as of: #{Time.now.strftime(time_format)}"
+        puts
+        puts "    %40s %6d *" % [ "Total Certificates Found:", total ]
+        bucket_totals.keys.sort.each do |bucket|
+          puts "    %40s %6d (%3.1f%%)" % [ "#{bucket}:", bucket_totals[bucket], bucket_totals[bucket] * 100 / total ]
+        end
+        puts
+        puts <<-"EOEXPLAIN"
+* (Determined by looking at #{cadir}/signed/*.pem)
+
+Potentially Vulnerable nodes are those who have the subjectAltName extension in
+their certificate.  The --yaml option to this script will provide detailed
+information
+        EOEXPLAIN
+        puts
+      end
+    end
+
+    def main(argv=nil)
+      argv = argv ? argv.dup : ARGV.dup
+      if argv.include?('--help')
+        display_help
+        exit(0)
+      end
+      options = {}
+      options[:render_as] = :yaml if argv.include?('--yaml')
+      run(options)
+    end
+
+    def display_help
+      puts <<-EOHELP
+      This program scans certificates in the Puppet CA's "signed" directory.  The
+      goal is to look for certificates who have a subjectAltName attribute that
+      allows the certificate to be used to impersonate the puppet master.
+      EOHELP
+    end
+  end
+end
+
+# Sometimes I miss Python...
+if __FILE__ == $0
+  CVE20113872::ScanCerts.new.main(ARGV)
+end
