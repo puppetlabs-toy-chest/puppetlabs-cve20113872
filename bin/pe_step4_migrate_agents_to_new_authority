@@ -13,7 +13,11 @@ class="${module}::step4"
 manifest="$(puppet master --configprint manifest)"
 
 timestamp="$(ruby -e 'puts Time.now.to_i')"
-idx=0
+
+# If this starts at 0, incrementing it will exit nonzero
+# See: https://gist.github.com/1310371
+# and https://github.com/puppetlabs/puppetlabs-cve20113872/issues/69
+idx=1
 
 # Add the cve20113872::step4 class to the catalog of every node.  This catalog
 # will cause the agent to move its ssldir out of the way and submit a new CSR
