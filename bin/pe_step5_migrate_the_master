@@ -44,9 +44,20 @@ if [[ -z "${DNS_ALT_NAMES}" ]]; then
   exit 1
 fi
 
+# Figure out if we've been patched or not.
+if puppet master --configprint dns_alt_names &>/dev/null; then
+  HAVE_PATCHED='true'
+  alt_names_option="dns_alt_names"
+  alt_names_separator=","
+else
+  HAVE_PATCHED='false'
+  alt_names_option="certdnsnames"
+  alt_names_separator=":"
+fi
+
 # This is disabled at this point in puppet.conf, so we have to read it from what
 # we wrote out in step1
-certdnsnames="${DNS_ALT_NAMES}"
+alt_names_value="${DNS_ALT_NAMES}"
 intermediate_name="${DNS_NAME}"
 
 echo -n "Stopping Puppet Master..." >&2
@@ -58,7 +69,7 @@ for d in certs private_keys public_keys ca/signed; do
   mv "${ssldir}/${d}/${certname}.pem" "${ssldir}/${d}/${certname}.pem.previous"
 done
 # Now issue the new certificate
-puppet cert --generate --certdnsnames "${certdnsnames}" "${certname}" >/dev/null
+puppet cert --generate "--${alt_names_option}" "${alt_names_value}" "${certname}" >/dev/null
 echo "done." >&2
 
 # Replace the certificate bundles which authenticate the previous ca with a
