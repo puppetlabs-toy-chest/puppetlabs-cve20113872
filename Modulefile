@@ -1,5 +1,5 @@
 name    'puppetlabs-cve20113872'
-version '0.0.2'
+version '0.0.3'
 source 'git@github.com:puppetlabs/puppetlabs-cve20113872.git'
 author 'puppetlabs'
 license 'Apache 2.0'
