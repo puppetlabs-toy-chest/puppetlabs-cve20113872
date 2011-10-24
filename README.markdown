@@ -1,89 +1,75 @@
-# CVE-2011-3872 Module #
+CVE-2011-3872 Remediation Toolkit
+=================================
 
-This module provides three main pieces of functionality:
+This module will help you permanently remediate the CVE-2011-3872 AltNames
+vulnerability. 
 
- * Am I vulnerable?
- * Help me get secure
- * Once secure, help me migrate to a new CA
-
-# Usage Guides #
+## Usage Guides
 
 Please see the detailed usage guides at:
 
- * [README-detailed.markdown](README-detailed.markdown)
- * [README-manual-ssh.markdown](README-manual-ssh.markdown)
+* [README-detailed.markdown](./README-detailed.markdown) (for remediating your
+  site with Puppet)
+* [README-ssh-only.markdown](./README-manual-ssh.markdown) (For remediating your
+  site with SSH)
 
-# Quick Start #
+## Summary
 
-Download the tarball of this module and install with the puppet-module command.
+* If your puppet master's `certdnsnames` setting has **ever** been turned on,
+  your site is at risk for attacks via the CVE-2011-3872 AltNames vulnerability.
+* The AltNames vulnerability will persist even after Puppet has been updated
+  to an unaffected version. It must be specifically remediated, either manually
+  or with this helper module.
 
-    cd /tmp
-    wget http://links.puppetlabs.com/puppetlabs-cve20113872-0.0.1.tar.gz
-    cd $(puppet master --configprint confdir)/modules
-    puppet-module install /tmp/puppetlabs-cve20113872-0.0.1.tar.gz
+## Am I Vulnerable?
 
-If you're running an older version of the puppet-module tool, you may need to:
+If you have used `certdnsnames` on your puppet master, you are potentially
+vulnerable. All Puppet Enterprise users have used `certdnsnames` at some
+point.
 
-    mv puppetlabs-cve20113872 cve20113872
+To quickly test whether you are vulnerable, you can use the `scan_certs`
+script included in this module's `bin/` directory:
 
-# Check if you're vulnerable #
-
-A small script is provided to help determine if you're vulnerable or not.  The
-script scans all of the certificates the Puppet CA has issued.  If you
-regularly clean out your "signed" directory then this script won't be able to
-determine if agents possess certificates with subjectAltNames.
-
-To scan:
-
-    cd $(puppet master --configprint confdir)/modules
-    ./cve20113872/bin/scan_certs
-
-You should see output similar to this:
+    # bin/scan_certs
 
     Status as of: 2011-10-23 19:42:26
     
                        Total Certificates Found:      7 *
                          Potentially Vulnerable:      7 (100.0%)
-    
-    * (Determined by looking at /etc/puppetlabs/puppet/ssl/ca/signed/\*.pem)
-    
-    Potentially Vulnerable nodes are those who have the subjectAltName extension in
-    their certificate.  The --yaml option to this script will provide detailed
-    information
+    ...
 
-This information means that the utility found 7 certificates in $cadir/signed
-and all 7 certificates have the subjectAltNames attribute set.  These
-certificates might be able to impersonate the Puppet Master and launch and man
-in the middle attack.
+**This script is not infallible,** as it relies on the Puppet CA's certificate
+cache. If the cache has ever been deleted or modified, the script may return a
+false negative. If in doubt, we recommend remediating the vulnerability.
 
-# Check Progress #
+## How to Remediate CVE-2011-3872
 
-During the remediation process, please use the `check_progress` script to see
-the number of nodes in your fleet that have made progress through the
-remediation process.
+You must fulfill two requirements to protect your site:
 
-The script produces summary output which looks like:
+1. Disable puppet master's `certdnsnames` setting, and/or upgrade Puppet to an
+   unaffected version.
+2. Ensure that agents contact the master at a "clean" DNS name that has never
+   been used as a subject alternative name by the site's CA.
 
-    Status as of: 2011-10-23 16:57:30
-    
-                                    Total Nodes:      4 *
-                           Step 0 (Has not run):      1 (25.0%)
-                            Step 2 (DNS Switch):      1 (25.0%)
-                            Step 4 (SSL Switch):      2 (50.0%)
-    
-     * Total of the nodes active within the last 30 days
-    
-                         Potentially Vulnerable:      1 (25.0%)
-             Risk Mitigated (Issued a new Cert):      1 (25.0%)
-                   Risk Mitigated (Pending CSR):      1 (25.0%)
-            Risk Mitigated (Using new DNS name):      1 (25.0%)
-        --------------------------------------------------------
-                      Total of Nodes Remediated:      3 (75.0%)
+There are multiple ways to meet the second requirement. You can:
 
-# Additional Information #
+* Pick a new DNS name and reconfigure all agents to use it
+* Replace the CA and re-issue all certificates (so that ALL DNS names
+  are "clean")
+* Do both -- use a new DNS name for now, and clean your master's previous DNS
+  name at your convenience
 
-Please see the detailed information in
-[README-detailed.markdown](README-detailed.markdown) and instructions about a
-generic remediation process using SSH at
-[README-manual-ssh.markdown](README-manual-ssh.markdown).
+**TO REMEDIATE YOUR SITE WITH PUPPET,** see the
+[README-detailed.markdown](./README-detailed.markdown) file included with this
+module.
+
+**TO REPLACE THE CA IMMEDIATELY WITH SSH,** see the
+[README-ssh-only.markdown](./README-ssh-only.markdown) file included with this
+module.
+
+## More Information
+
+For more information about this vulnerability, including a FAQ, details about
+updated Puppet versions, and links to security hotfixes, go to:
+<http://puppetlabs.com/security/cve/cve-2011-3872>.
 
