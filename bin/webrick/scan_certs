@@ -1,7 +1,5 @@
 #! /usr/bin/env ruby
 #
-# PE_SPECIFIC - Note the PE specific ruby interpreter.  A wrapper script will
-# need to be generated if this progress script is to be generalized.
 
 require 'pathname'
 require 'openssl'
