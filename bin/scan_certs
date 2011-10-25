@@ -100,7 +100,7 @@ module CVE20113872
       else
         total = nodes.keys.length
         # Now we want our bucket totals.  These give more concrete status of risk mitigation.
-        bucket_totals = nodes.reduce(Hash.new() { |h,k| h[k] = 0 }) do |hsh, (node, node_hsh)|
+        bucket_totals = nodes.inject(Hash.new() { |h,k| h[k] = 0 }) do |hsh, (node, node_hsh)|
           hsh[node_hsh['bucket']] += 1
           hsh
         end
