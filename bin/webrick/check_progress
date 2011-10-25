@@ -113,7 +113,7 @@ module CVE20113872
         total = nodes.keys.length
         # Gather a total for each step.  The step will be the key of the result
         # and the value will be the total number of nodes at that step.
-        step_totals =  nodes.reduce(Hash.new() { |h,k| h[k] = 0 }) do |hsh, (node, node_hsh)|
+        step_totals =  nodes.inject(Hash.new() { |h,k| h[k] = 0 }) do |hsh, (node, node_hsh)|
           hsh[node_hsh['step']] += 1
           hsh['total'] += 1
           hsh
@@ -131,7 +131,7 @@ module CVE20113872
         puts " * Total of the nodes active within the last 30 days"
         puts
         # Now we want our bucket totals.  These give more concrete status of risk mitigation.
-        bucket_totals = nodes.reduce(Hash.new() { |h,k| h[k] = 0 }) do |hsh, (node, node_hsh)|
+        bucket_totals = nodes.inject(Hash.new() { |h,k| h[k] = 0 }) do |hsh, (node, node_hsh)|
           hsh[node_hsh['bucket']] += 1
           hsh
         end
@@ -139,7 +139,7 @@ module CVE20113872
           puts "    %40s %6d (%3.1f%%)" % [ "#{bucket}:", bucket_totals[bucket], bucket_totals[bucket] * 100 / step_totals['total'] ]
         end
         # Get a total of "Risk Mitigated" buckets
-        mitigated_count = bucket_totals.reduce(0) do |mitigated, (bucket, bucket_count)|
+        mitigated_count = bucket_totals.inject(0) do |mitigated, (bucket, bucket_count)|
           mitigated += bucket_count if bucket =~ /Risk Mitigated/
           mitigated
         end
