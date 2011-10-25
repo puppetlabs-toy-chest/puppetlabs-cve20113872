@@ -1,3 +1,6 @@
+2011-10-25 Puppet Labs <support@puppetlabs.com> - 0.0.5A
+* Fix ruby 1.8.5 compatibility issue with scan and progress scripts
+
 2011-10-24 Puppet Labs <support@puppetlabs.com> - 0.0.4
 * Add support for --dns_alt_names to the foss remediation process
   As per https://github.com/puppetlabs/puppetlabs-cve20113872/issues/71
