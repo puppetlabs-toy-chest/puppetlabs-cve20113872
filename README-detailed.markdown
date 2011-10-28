@@ -118,9 +118,9 @@ This module must be installed in Puppet's `modulepath` before you can use it.
 If you have the puppet-module tool installed, you can run the following:
 
     cd /tmp
-    wget http://links.puppetlabs.com/puppetlabs-cve20113872-0.0.1.tar.gz
+    wget http://links.puppetlabs.com/cve20113872_remediation
     cd $(puppet master --configprint confdir)/modules
-    puppet-module install /tmp/puppetlabs-cve20113872-0.0.1.tar.gz
+    puppet-module install /tmp/puppetlabs-cve20113872-0.0.5.tar.gz
 
 If you're running an older version of the puppet-module tool, you may need to:
 
@@ -387,8 +387,6 @@ of this module, run the following:
 Re-start **your original production-scale puppet master server.**
 
 #### Site status after running step 5:
-
-After every agent node has checked in once:
 
 - CA will create dangerous certs? **NO.** (fixed!)
 - Agents can be spoofed by agent certs? **NO.** (fixed!)
